@@ -1,4 +1,3 @@
-import { Log } from 'viem';
 import { ByteUtils, ByteLength } from '../utils/bytes';
 import {
   CommitmentEvent,

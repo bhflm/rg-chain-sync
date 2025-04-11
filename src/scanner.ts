@@ -1,82 +1,101 @@
 import { createPublicClient, http, type PublicClient, type Log, type Address, type Chain, type AbiEvent } from 'viem';
 import {
-  GENERATED_COMMITMENT_BATCH_EVENT,
-  COMMITMENT_BATCH_EVENT,
-  NULLIFIERS_EVENT
-} from './abi/events';
- 
-// Scanner Module
-// - Primary responsibility: Query blockchain for Railgun related events
-// - Key features:
-//   - Connect to EVM providers
-//   - Fetch blocks and logs with efficient filtering
-//   - Handle provider failures and reconnections
-//   - Support different scanning modes (historical, catchup, and real-time)
+  V1_EVENTS_ABI,
+  V1_EVENTS,
+  V1EventType,
+} from './abi/v1/events';
+import {
+  V2_EVENTS_ABI,
+  V2_LEGACY_EVENTS_ABI,
+  V2_EVENTS,
+  V2EventType,
+} from './abi/v2/events';
+import { 
+  NetworkName, 
+  RailgunProxyContract, 
+  RailgunProxyDeploymentBlock,
+  NetworkToViemChain,
+  getNetworkName
+} from './config/network-config';
 
-export const V1_EVENTS = {
-  GENERATED_COMMITMENT_BATCH: 'GeneratedCommitmentBatch',
-  COMMITMENT_BATCH: 'CommitmentBatch',
-  NULLIFIERS: 'Nullifiers',
-} as const;
+export { V1_EVENTS, V2_EVENTS };
 
-export type V1EventType = typeof V1_EVENTS[keyof typeof V1_EVENTS];
+export type EventType = V1EventType | V2EventType;
 
-interface ScannerConfig {
-  chain: Chain;
-  contractAddress: Address;
+export type ScannerVersion = 'v1' | 'v2' | 'v2-legacy';
+
+export interface ScannerConfig {
+  networkName: string | NetworkName;
   providerUrl: string;
   batchSize?: number;
   startBlock?: number;
   scanRetryCount?: number;
+  version: ScannerVersion;
+  contractAddress?: Address; // define if this needed, perhaps for extending to new chains ??, tho should refactor more in depth given that case
 };
-
 
 export class RailgunScanner {
   private client: PublicClient;
-  private chain: Chain;
   private batchSize: number;
   private scanRetryCount: number;
   private startBlock: number;
   private contractAddress: Address;
+  private version: ScannerVersion;
+  private networkName: NetworkName;
 
   constructor(
     private config: ScannerConfig,
   ) {
+    this.networkName = getNetworkName(config.networkName);
+    
+    
+    const viemChain = NetworkToViemChain[this.networkName];
+    if (!viemChain) {
+      throw new Error(`Unsupported network: ${this.networkName}`);
+    }
+
+    // leave room for custom contract ???? 
+    this.contractAddress = (config.contractAddress || 
+      RailgunProxyContract[this.networkName]) as Address;
+
+    // start block we already have on network cfg from shared models, no point on letting room for going before that ?? idc
+    this.startBlock = config.startBlock !== undefined ? 
+      config.startBlock : 
+      RailgunProxyDeploymentBlock[this.networkName];
+
     this.client = createPublicClient({
-      chain: config.chain,
+      chain: viemChain,
       transport: http(config.providerUrl),
     });
 
-    this.chain = config.chain;
     this.batchSize = config.batchSize ?? 1000;
     this.scanRetryCount = config.scanRetryCount ?? 3;
-    this.startBlock = config.startBlock ?? 0;
-    this.contractAddress = config.contractAddress as Address;
+    this.version = config.version;
   }
 
-   /**
-     * Get logs for a specific event type within a block range
-     */
-   public async getLogsForEvent(
-    eventType: V1EventType,
+  /**
+  * Get logs for a specific event type within a block range
+  */
+  public async getLogsForEvent(
+    eventType: EventType,
     fromBlock: bigint,
     toBlock: bigint,
   ): Promise<Log[]> {
     
-    let event: AbiEvent;
+    let event: AbiEvent | undefined;
     
-    if (eventType === V1_EVENTS.GENERATED_COMMITMENT_BATCH) {
-      event = GENERATED_COMMITMENT_BATCH_EVENT;
-    } else if (eventType === V1_EVENTS.COMMITMENT_BATCH) {
-      event = COMMITMENT_BATCH_EVENT;
-    } else if (eventType === V1_EVENTS.NULLIFIERS) {
-      event = NULLIFIERS_EVENT;
-    } else {
-      throw new Error(`Unknown event type: ${eventType}`);
+    if (this.version === 'v1') {
+      event = V1_EVENTS_ABI[eventType];
+    } else if (this.version === 'v2') {
+      event = V2_EVENTS_ABI[eventType];
+    } else if (this.version === 'v2-legacy') {
+      event = V2_LEGACY_EVENTS_ABI[eventType];
     }
-    
 
-    // @@ TODO: Implement try and catch with retry blocks, this just works as one call! with a given range of blocks
+    if (!event) {
+      throw new Error(`Unknown event type ${eventType} for version ${this.version}`);
+    }
+
     const logs = await this.client.getLogs({
       address: this.contractAddress,
       event: event,

@@ -1,66 +1,30 @@
-import { test, describe, it, mock } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { RailgunScanner, V1_EVENTS } from '../src/scanner';
-import { mainnet } from 'viem/chains';
-import { CommitmentEvent, Nullifier } from '../src/types/events';
-import { createPublicClient } from 'viem';
 import { ByteUtils } from '../src/utils/bytes';
 
-const V1_PROXY_ADDRESS = '0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9';
-const API_KEY = process.env.API_KEY;
 const alchemyURL = `https://eth-mainnet.g.alchemy.com/v2/${API_KEY}`;
 
 describe('RailgunScanner', () => {
-  it('should initialize with default values', () => {
-    const scanner = new RailgunScanner({
-      chain: mainnet,
+  it('should initialize with v1 values', () => {
+    const v1Scanner = new RailgunScanner({
+      networkName: 'ethereum',
       providerUrl: alchemyURL,
-      contractAddress: V1_PROXY_ADDRESS,
-      startBlock : 14737691,
+      version: 'v1'
     });
     
-    assert.ok(scanner, 'Scanner should be initialized');
-  });
-  
-  it('should fetch event logs', async () => {
-    const scanner = new RailgunScanner({
-      chain: mainnet,
-      providerUrl: alchemyURL,
-      contractAddress: V1_PROXY_ADDRESS,
-      startBlock : 14737691,
-    });
-    
-    const fromBlock = 14737691;
-    const toBlock = 14738000;
-    
-    const logs = await scanner.getLogsForEvent(
-      V1_EVENTS.COMMITMENT_BATCH,
-      BigInt(fromBlock),
-      BigInt(toBlock)
-    );
-    
-    console.log(`Found ${logs.length} CommitmentBatch logs`);
-    assert.ok(logs !== undefined, 'Logs should be defined');
-    
-    const nullifierLogs = await scanner.getLogsForEvent(
-      V1_EVENTS.NULLIFIERS,
-      BigInt(fromBlock),
-      BigInt(toBlock)
-    );
-    
-    console.log(`Found ${nullifierLogs.length} Nullifiers logs`);
-    assert.ok(nullifierLogs !== undefined, 'Nullifier logs should be defined');
+    assert.ok(v1Scanner, 'Scanner should be initialized');
+    // do public methods for getting netwokr name and check for v1 abi ettc etc
   });
 
-  it('Should fetch events from a wide block range with the proxy contract', async () => {
-    const scanner = new RailgunScanner({
-      chain: mainnet,
+  it('Should fetch events from v1', async () => {
+
+    const v1Scanner = new RailgunScanner({
+      networkName: 'ethereum',
       providerUrl: alchemyURL,
-      contractAddress: V1_PROXY_ADDRESS,
-      startBlock: 14737691,
+      version: 'v1'
     });
     
-    // Wide range scanning - try a full year's worth of blocks
     const fromBlock = 14737691;
     const toBlock = 15500000;   
     
@@ -69,7 +33,7 @@ describe('RailgunScanner', () => {
         console.log(`\nFetching logs for event: ${eventType}`);
         const startTime = Date.now();
         
-        const logs = await scanner.getLogsForEvent(
+        const logs = await v1Scanner.getLogsForEvent(
           eventType,
           BigInt(fromBlock),
           BigInt(toBlock)
