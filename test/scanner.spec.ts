@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { RailgunScanner, V1_EVENTS, V2_EVENTS } from '../src/scanner';
 import { ByteUtils } from '../src/utils/bytes';
 
+const API_KEY = process.env.API_KEY
 const alchemyURL = `https://eth-mainnet.g.alchemy.com/v2/${API_KEY}`;
 
 describe('RailgunScanner', () => {
@@ -155,5 +156,9 @@ describe('RailgunScanner', () => {
         }
       }
     });
+  });
+
+  describe('scanner: scanForEvents', () => {
+      
   });
 });

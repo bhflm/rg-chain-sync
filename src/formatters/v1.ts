@@ -15,6 +15,7 @@ function formatLegacyCommitmentCiphertext(commitment: any) {
   const ivTag = ciphertext[0];
 
   return {
+    
     ciphertext: {
       iv: ivTag.substring(0, 32),
       tag: ivTag.substring(32),
