@@ -11,10 +11,11 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "npm run build && node --test ./test/rpc.spec.js",
+    "test": "npm run build && node --test ./test/aggregated.spec.js",
     "clean": "tsc --build --clean"
   },
   "dependencies": {
-    "viem": "^2.26.2"
+    "viem": "^2.26.2",
+    "@railgun-reloaded/subsquid-client": "github:railgun-reloaded/subsquid-client#chore/review-misc"
   }
 }

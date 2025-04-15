@@ -1,9 +1,7 @@
-import { type Log, type Hash, type Hex, type Address, type Abi, parseEventLogs, ParseEventLogsReturnType } from "viem";
+import { type Log, type Abi, parseEventLogs } from "viem";
 import { RailgunScanner, type EventType, type ScannerVersion } from "../scanner";
-import { RAILGUN_ABI } from '../abi';
-import { DataSource, DataCompleteness } from "../types/datasource";
+import { DataSource } from "../types/datasource";
 import { DataEntry, RailgunEventType } from "../types/data-entry";
-import { ByteUtils, ByteLength } from "../utils/bytes";
 import { adaptParsedCommitmentBatch, adaptParsedNullifiers, adaptParsedUnshield, adaptParsedShield } from "../adapters/rpc-events";
 
 
@@ -40,13 +38,13 @@ export class RpcSource implements DataSource {
     scannerConfig: ConstructorParameters<typeof RailgunScanner>[0] // Pass scanner config directly
   ) {
     this.scanner = new RailgunScanner(scannerConfig);
-    // @ts-ignore - Access private property for now, ideally expose via getter
+    // @ts-ignore // dirty bad boy // TODO: Implement this as a public getter
     this.currentAbi = this.scanner.currentAbi!;
-     // @ts-ignore
+     // @ts-ignore // dirty bad boy stop  // TODO: Implement this as a public getter
     this.version = this.scanner.version;
-     // @ts-ignore
+     // @ts-ignore // bad boy stop doing this // TODO: Implement this as a public getter
     this.batchSize = this.scanner.batchSize;
-    this.updateHead(); // Initial head update
+    this.updateHead();
   }
 
   private async updateHead() {
@@ -66,12 +64,12 @@ export class RpcSource implements DataSource {
           return this.blockTimeCache.get(blockNumber)!;
       }
       try {
-           // @ts-ignore
+           // @ts-ignore // TODO: Implement this as a public getter
           const block = await this.scanner.client.getBlock({ blockNumber });
           const timestamp = Number(block.timestamp);
           this.blockTimeCache.set(blockNumber, timestamp);
 
-          // Keep the size of the cache considerably low
+          // keep the size of the cache considerably low
           if (this.blockTimeCache.size > (this.batchSize * 2)) {
              const oldestKey = this.blockTimeCache.keys().next().value;
              if (oldestKey !== undefined) {
@@ -90,29 +88,13 @@ export class RpcSource implements DataSource {
     const self = this;
     await this.updateHead();
 
-    // Determine which scanner event types to fetch based on requested RailgunEventTypes
-    const scannerEventTypesToFetch: EventType[] = [];
-    if (eventTypes) {
-        for (const requestedType of eventTypes) {
-            // Need reverse mapping from RailgunEventType to Scanner's EventType
-            // This is complex due to V1/V2 overlap. Simplification: fetch all known types for now.
-             // TODO: Implement proper reverse mapping if filtering is critical
-        }
-    }
-
-    const allKnownScannerEvents = Object.keys(
-        this.version === 'v1' ? RAILGUN_ABI.V1_RAILGUN_LOGIC :
-        this.version === 'v2' ? RAILGUN_ABI.V2_RAILGUN_SMART_WALLET : RAILGUN_ABI.V2_RAILGUN_SMART_WALLET_LEGACY
-    ) as EventType[];
-
-
     let currentHeight = height;
     let currentBatchEntries: DataEntry[] = [];
     let bufferIndex = 0;
 
     const iterableIterator = {
       async next(): Promise<IteratorResult<DataEntry>> {
-        // Loop indefinitely until we return a value or signal completion
+        // loop indefinitely until we return a value or signal completion
         while (true) {
           // 1. Yield from buffer if available
           if (bufferIndex < currentBatchEntries.length) {
@@ -123,12 +105,12 @@ export class RpcSource implements DataSource {
           // 2. Buffer is empty. Check if we need to fetch a new batch.
           // Stop if we've scanned past the current known head.
           if (currentHeight > self.head) {
-            // Optional: Re-check head for live syncing scenarios
+            //  live syncing scenarios might need to update this head somewhere here ?? 
             await self.updateHead();
             if (currentHeight > self.head) {
-              // Still past the head, we are truly done for now.
+              // past the head, we are truly done
               console.log(`RpcSource: Reached head ${self.head}, stopping iterator.`);
-              // If this source should poll or wait for new blocks, logic goes here.
+              // wait for new blocks, logic goes here.
               // For now, signal completion.
               self.syncing = false; // Mark as not actively syncing new blocks currently
               return { done: true, value: undefined };
@@ -147,8 +129,8 @@ export class RpcSource implements DataSource {
           if (fromBlock > toBlock) {
               console.log(`RpcSource: fromBlock (${fromBlock}) > toBlock (${toBlock}), likely caught up to head. Waiting or stopping.`);
               // Implement waiting logic or stop if not live syncing
-              await new Promise(resolve => setTimeout(resolve, 5000)); // Simple wait
-              continue; // Re-evaluate head in the next loop iteration
+              await new Promise(resolve => setTimeout(resolve, 5000)); // wait just in case
+              continue;
           }
 
           console.log(`RpcSource: Fetching new batch: blocks ${fromBlock} to ${toBlock}`);
@@ -159,7 +141,7 @@ export class RpcSource implements DataSource {
             bufferIndex = 0;          // Reset buffer index
 
             // Fetch all raw logs for the contract in this range
-             // @ts-ignore - Accessing private client; ideally expose via scanner method
+             // @ts-ignore - @@TODO: rework and make this public function too
             const rawLogs: Log[] = await self.scanner.client.getLogs({
                 address: self.scanner.getContractAddress(), // Use the getter
                 fromBlock,
@@ -174,14 +156,14 @@ export class RpcSource implements DataSource {
                     strict: false, // Be lenient: allows ABI to have more events than logs found
                 });
 
-                // Efficiently fetch timestamps for all unique blocks in this batch
+                // fetch timestamps for all unique blocks in this batch
                 const blockNumbersInBatch = [...new Set(parsedLogs.map(log => log.blockNumber).filter(bn => bn !== null))] as bigint[];
                 const timestampPromises = blockNumbersInBatch.map(bn => self.getBlockTimestamp(bn));
                 await Promise.all(timestampPromises); // Pre-fetch/cache timestamps concurrently
 
                 // Adapt each parsed log into our standard DataEntry format
                 for (const parsedLog of parsedLogs) {
-                    // Ensure block number is not null (shouldn't be for fetched logs)
+                    // just check we're not doing silly things just IN CASE
                     if (parsedLog.blockNumber === null || parsedLog.logIndex === null || parsedLog.transactionHash === null) {
                         console.warn("RpcSource: Encountered log with null block/tx/log index, skipping:", parsedLog);
                         continue;
@@ -190,12 +172,12 @@ export class RpcSource implements DataSource {
                     const timestamp = self.blockTimeCache.get(parsedLog.blockNumber) ?? 0;
                     if (timestamp === 0) {
                         console.warn(`RpcSource: Could not get timestamp for block ${parsedLog.blockNumber}, skipping log.`);
-                        continue; // Skip if timestamp fetch failed
+                        continue;
                     }
 
                     if (!parsedLog.eventName) {
                         console.warn("RpcSource: Encountered parsed log without event name, skipping:", parsedLog);
-                        continue; // Should have eventName if parsing worked
+                        continue; //
                     }
 
                     // Map the scanner's event name to our standardized RailgunEventType
@@ -231,12 +213,12 @@ export class RpcSource implements DataSource {
                         }
                     } catch (adaptError) {
                         console.error(`RpcSource: Error adapting ${parsedLog.eventName} log at block ${parsedLog.blockNumber}, tx ${parsedLog.transactionHash}:`, adaptError, parsedLog);
-                        // Skip this specific log, but continue processing the batch
+                        // skip this specific log, but continue processing the batch
                         continue;
                     }
 
 
-                    // Add the adapted entry (or entries) to the current batch buffer
+                    // add the adapted entry (or entries) to the current batch buffer
                     if (adaptedEntries) {
                         if (Array.isArray(adaptedEntries)) {
                             currentBatchEntries.push(...adaptedEntries);
@@ -244,9 +226,9 @@ export class RpcSource implements DataSource {
                             currentBatchEntries.push(adaptedEntries);
                         }
                     }
-                } // End of loop through parsedLogs
+                } // end of loop through parsedLogs
 
-                // Sort the collected batch entries chronologically
+                // sort the collected batch entries chronologically
                 currentBatchEntries.sort((a, b) => {
                   if (a.blockNumber !== b.blockNumber) {
                     // Convert bigint to number for safe subtraction if range is reasonable, otherwise use comparison
@@ -269,21 +251,19 @@ export class RpcSource implements DataSource {
             // - If currentBatchEntries is still empty (no events in the scanned range), the loop continues to fetch the *next* block range.
 
           } catch (error) {
-            // Handle errors during the batch fetch/process phase
             console.error(`RpcSource: Error processing blocks ${fromBlock}-${toBlock}:`, error);
             // Strategy: Skip this batch and try the next one. Could implement retry logic here.
             currentHeight = toBlock + 1n;
             // Loop continues, will attempt to fetch the next batch.
           }
-          // End of try-catch for batch processing
-        } // End of while(true) loop
+        }
       },
       [Symbol.asyncIterator](): AsyncIterableIterator<DataEntry> {
         return this;
       }
     };
 
-    return iterableIterator;
+    return Promise.resolve(iterableIterator);
   }
 
   destroy(error?: Error): void {

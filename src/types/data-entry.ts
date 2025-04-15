@@ -16,7 +16,6 @@ export enum RailgunEventType {
   Transact = 'Transact', // V2/V2-Legacy
 }
 
-// Example: Commitment Batch (adjust based on actual V1/V2 differences if any)
 interface CommitmentBatchPayload {
   treeNumber: number;
   startPosition: number;
@@ -143,7 +142,7 @@ export type DataEntry =
   // ... etc.
 ;
 
-// --- Type Guards (Optional but Recommended) ---
+// some guards (optional, not really needed but meh)
 export function isCommitmentBatchEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.CommitmentBatch; payload: CommitmentBatchPayload } {
     return entry.type === RailgunEventType.CommitmentBatch;
 }
