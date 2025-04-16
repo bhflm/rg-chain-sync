@@ -85,6 +85,7 @@ interface BaseDataEntry {
   completeness: DataCompleteness;
   /** Optional: RAILGUN transaction ID (often only from Subsquid/processed data) */
   railgunTxid?: string; // Usually undefined for raw RPC
+  // have logs ???
 }
 
 /***
@@ -158,4 +159,3 @@ export function isUnshieldEntry(entry: DataEntry): entry is BaseDataEntry & { ty
 export function isShieldEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.Shield; payload: ShieldPayload } {
     return entry.type === RailgunEventType.Shield;
 }
-// Add more type guards as needed

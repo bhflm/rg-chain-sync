@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, after, before } from 'node:test';
 import assert from 'node:assert';
-import { SubsquidSource } from '../src/datasources/subsquid';
+import { SubsquidSource } from '../src/data-sources/subsquid/';
 import { RailgunEventType, DataEntry, isCommitmentBatchEntry, isNullifiersEntry } from '../src/types/data-entry'; // Import new types
 import { NetworkName } from '../src/config/network-config';
 import { DataCompleteness } from '../src/types/datasource';
@@ -62,7 +62,7 @@ describe('SubsquidSource', () => {
             // Check if it's a nullifier and at or after the target block
             if (entry.blockNumber >= targetBlock && isNullifiersEntry(entry)) {
                 foundMatch = true;
-                console.log('SUBSQUID SOURCE TARGET: ', entry);
+                console.log('SUBSQUID SOURCE TARGET: ',)
                 console.log(`[Test Subsquid Source] Found Nullifiers entry at block ${entry.blockNumber}, tx ${entry.transactionHash}`);
 
 

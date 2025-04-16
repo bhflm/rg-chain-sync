@@ -1,18 +1,20 @@
+require('dotenv').config();
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 
 // Import specific sources
-import { RpcSource } from '../src/datasources/rpc';
-import { SubsquidSource } from '../src/datasources/subsquid';
+import { RpcSource } from '../src/data-sources/rpc/';
+import { SubsquidSource } from '../src/data-sources/subsquid/';
 
-// This one shoudl actually be on some else directory and not at the same level as prior sources but okkkkk
-import { AggregatedSource } from '../src/datasources/aggregated';
+import { AggregatedSource } from '../src/data-aggregator/aggregator';
 
 import { isNullifiersEntry } from '../src/types/data-entry';
 import { NetworkName } from '../src/config/network-config';
 
-const API_KEY = process.env.ALCHEMY_API_KEY || ``;
+const API_KEY = process.env.API_KEY;
 const alchemyURL = `https://eth-mainnet.g.alchemy.com/v2/${API_KEY}`;
+
+console.log('ALCHEMY URL: ', alchemyURL);
 
 
 // using this block as reference since it has a known nullifier from playground 

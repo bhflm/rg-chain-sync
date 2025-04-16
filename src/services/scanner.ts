@@ -18,7 +18,7 @@ import {
   V2EventType,
   RailgunAbi, 
   RAILGUN_ABI,
-} from './abi';
+} from '../abi';
 
 import { 
   NetworkName, 
@@ -26,7 +26,7 @@ import {
   RailgunProxyDeploymentBlock,
   NetworkToViemChain,
   getNetworkName
-} from './config/network-config';
+} from '../config/network-config';
 
 
 export { V1_EVENTS, V2_EVENTS };

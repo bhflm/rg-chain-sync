@@ -16,7 +16,6 @@ export interface SubsquidNullifierData {
 
 
 export function adaptSubsquidNullifier(
-    // Use the locally defined interface here
     sqNullifierData: SubsquidNullifierData
 ): DataEntry | null {
 

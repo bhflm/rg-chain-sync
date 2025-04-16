@@ -1,8 +1,8 @@
 import { type Log, type Abi, parseEventLogs } from "viem";
-import { RailgunScanner, type EventType, type ScannerVersion } from "../scanner";
-import { DataSource } from "../types/datasource";
-import { DataEntry, RailgunEventType } from "../types/data-entry";
-import { adaptParsedCommitmentBatch, adaptParsedNullifiers, adaptParsedUnshield, adaptParsedShield } from "../adapters/rpc-events";
+import { RailgunScanner, type EventType, type ScannerVersion } from "../../services/scanner";
+import { DataSource } from "../../types/datasource";
+import { DataEntry, RailgunEventType } from "../../types/data-entry";
+import { adaptParsedCommitmentBatch, adaptParsedNullifiers, adaptParsedUnshield, adaptParsedShield } from "../../adapters/rpc-events";
 
 
 // not so sure about this but idk

@@ -7,15 +7,16 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "dotenv": "^16.5.0",
     "typescript": "^5.8.3"
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "npm run build && node --test ./test/aggregated.spec.js",
+    "test": "npm run build && node --test ./test/aggregator.spec.js",
     "clean": "tsc --build --clean"
   },
   "dependencies": {
-    "viem": "^2.26.2",
-    "@railgun-reloaded/subsquid-client": "github:railgun-reloaded/subsquid-client#chore/review-misc"
+    "@railgun-reloaded/subsquid-client": "github:railgun-reloaded/subsquid-client#chore/review-misc",
+    "viem": "^2.26.2"
   }
 }

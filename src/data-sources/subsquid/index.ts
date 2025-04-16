@@ -1,7 +1,9 @@
 import { SubsquidClient } from "@railgun-reloaded/subsquid-client";
-import { DataSource } from "../types/datasource";
-import { DataEntry, RailgunEventType } from "../types/data-entry";
-import { adaptSubsquidNullifier, SubsquidNullifierData } from "../adapters/subsquid-events";
+import { DataSource } from "../../types/datasource";
+import { DataEntry, RailgunEventType } from "../../types/data-entry";
+import { adaptSubsquidNullifier, SubsquidNullifierData } from "../../adapters/subsquid-events";
+import { buildEventQueries, hasQueries } from './utils'
+
 
 interface SquidStatusResponse {
   squidStatus?: {
@@ -32,8 +34,8 @@ export class SubsquidSource implements DataSource {
               query: `query SquidStatus { squidStatus { height } }` // TODO: Check for exposed query on this -this was faster heh-
           }) as SquidStatusResponse;
 
-          const headStrOrNum = result?.squidStatus?.height; // this is horrible
-          if (headStrOrNum !== undefined && headStrOrNum !== null) { // this is horrible too
+          const headStrOrNum = result?.squidStatus?.height; // yuck
+          if (headStrOrNum !== undefined && headStrOrNum !== null) {
               const newHead = BigInt(headStrOrNum); // now I recall all my ghosts from thailand when we did mention bigInts for subsquid too much
               if (newHead > this.head) {
                 this.head = newHead;
@@ -60,19 +62,17 @@ export class SubsquidSource implements DataSource {
     let done = false;
     let lastProcessedBlock = height - 1n;
 
-    // from here onwards we focus on the types requested inside the array of eventTypes (events defined by ABI)
-    const queryNullifiers = !eventTypes || eventTypes.includes(RailgunEventType.Nullifiers);
-    // TODO: Add flags for other types (queryCommitments, queryShields, etc.)
-
-    // If no relevant types are requested, return an empty iterator immediately
-    if (!queryNullifiers /* && !queryCommitments && !queryShields etc. */) {
-        console.warn("SubsquidSource: No relevant event types requested for read().");
-        return Promise.resolve({
-            async next() { return { done: true, value: undefined }; },
-            [Symbol.asyncIterator]() { return this; }
-        });
+    if (!hasQueries(eventTypes)) {
+      console.warn("SubsquidSource: No relevant event types requested for read().");
+      return Promise.resolve({
+      async next() { return { done: true, value: undefined }; },
+      [Symbol.asyncIterator]() { return this; }
+      });
     }
 
+
+    const capturedEventTypes = eventTypes;
+    //////////
 
   const iterableIterator: AsyncIterableIterator<DataEntry> = {
     async next(): Promise<IteratorResult<DataEntry>> {
@@ -93,37 +93,20 @@ export class SubsquidSource implements DataSource {
           currentBatchEntries = [];
           bufferIndex = 0;
 
-          // aaaaAAAAAAAA
-          // THIS ONLY WORKS FOR NULLIFIERS
+          const queries = buildEventQueries(capturedEventTypes!, {
+            height: Number(height),
+            batchSize: self.batchSize,
+            offset: 0
+          })
 
-          // @@ TODO: Here I should figure out how to dynamic add entities from the eventTypes
-          // or at least map a way to build a dynamic query object 
-          // with the shape of query
-          // bc rn nullifiers is hardcoded but what happens when we need batch commitments, shields, etc.
+          console.log('QUERIES: ', queries);
 
-          const result = await self.subsquidClient.query({
-            nullifiers: {
-              fields: [ // Select fields needed by adapter
-                'id',
-                'blockNumber',
-                'blockTimestamp',
-                'transactionHash',
-                'treeNumber',
-                'nullifier'
-              ],
-            
-              where: {
-                  blockNumber_gte: height.toString()
-              },
-              limit: self.batchSize,
-              offset: currentOffset,
-              // orderBy: ['blockNumber_ASC', 'id_ASC'] 'NullifierOrderByInput.BlockNumberDesc' 
-              // @@ TODO: Export abocve type from subsquid client, its erroring
-            }
-          });
+          const result = await self.subsquidClient.query(queries);
 
+          console.log('RESULT: ', result);
 
-          const fetchedNullifiers = (result.nullifiers || []) as SubsquidNullifierData[]; // Use local type for safety
+          // Extract nullifiers from result, handling potential undefined fields
+          const fetchedNullifiers = ((result as any).nullifiers || []) as SubsquidNullifierData[]; // Use local type for safety
           // const fetchedCommitments = (result.commitments || []) as SubsquidCommitmentData[]; // example
 
           const itemsInThisFetch = fetchedNullifiers.length; // + fetchedCommitments.length // Adjust if querying multiple
@@ -142,7 +125,6 @@ export class SubsquidSource implements DataSource {
                   currentBatchEntries.push(adapted);
               }
           }
-          // TODO: Adapt other fetched types
 
           // Sort (less critical if only one type fetched, but good practice)
           currentBatchEntries.sort((a, b) => {

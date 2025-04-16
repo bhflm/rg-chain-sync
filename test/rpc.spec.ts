@@ -1,11 +1,12 @@
+require('dotenv').config();
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { RpcSource } from '../src/datasources/rpc';
+import { RpcSource } from '../src/data-sources/rpc/';
 import { RailgunEventType, isNullifiersEntry } from '../src/types/data-entry';
 import { NetworkName } from '../src/config/network-config';
 import { DataCompleteness } from '../src/types/datasource';
 
-const API_KEY = '' // i dont wanna install dotenv for real i just dont want to
+const API_KEY = process.env.API_KEY;
 const alchemyURL = `https://eth-mainnet.g.alchemy.com/v2/${API_KEY}`;
 
 
