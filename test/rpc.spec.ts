@@ -1,168 +1,217 @@
-require('dotenv').config();
-import { describe, it, before, after } from 'node:test';
-import assert from 'node:assert';
-import { RpcSource } from '../src/data-sources/rpc/';
-import { RailgunEventType, isNullifiersEntry } from '../src/types/data-entry';
-import { NetworkName } from '../src/config/network-config';
-import { DataCompleteness } from '../src/types/datasource';
+require("dotenv").config();
+import { describe, it, before, after } from "node:test";
+import assert from "node:assert";
+import { RpcSource } from "../src/data-sources/rpc/"; // Adjust path if needed
+import { RailgunEventType, isNullifiersEntry } from "../src/types/data-entry"; // Adjust path
+import { NetworkName } from "../src/config/network-config"; // Adjust path
+import { DataCompleteness } from "../src/types/datasource"; // Adjust path
 
 const API_KEY = process.env.API_KEY;
+if (!API_KEY) {
+  throw new Error("NO API KEY FOUND");
+}
 const alchemyURL = `https://eth-mainnet.g.alchemy.com/v2/${API_KEY}`;
 
+describe("RpcSource with ReadableStream", () => {
+  let rpcSource: RpcSource;
 
-describe('RpcSource', () => {
-    let rpcSource: RpcSource;
-
-    before(async () => {
-        rpcSource = new RpcSource({
-            networkName: NetworkName.Ethereum,
-            providerUrl: alchemyURL,
-            version: 'v2',
-            batchSize: 500,
-        });
-
-        const startTime = Date.now();
-        const waitTimeout = 5000;
-        while (rpcSource.head === 0n && (Date.now() - startTime) < waitTimeout) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        if (rpcSource.head === 0n) {
-            throw new Error("RpcSource head did not initialize in time");
-        }
-        console.log(`RpcSource initialized with head: ${rpcSource.head}`);
-      });
-
-    after(() => {
-      if (rpcSource) {
-        rpcSource.destroy();
-      }
+  before(async () => {
+    rpcSource = new RpcSource({
+      networkName: NetworkName.Ethereum,
+      providerUrl: alchemyURL,
+      // version: 'v2', // Assuming v2 for the test target block
+      // Let's explicitly test the block where the nullifier is known
+      version: "v1", // Target block 14755920 is likely V1 contract era
+      batchSize: 500, // Keep batch size reasonable for testing
     });
 
-  // it('should fetch and iterate through Nullifier events', async () => {
-  //   // Choose a block range known to contain V2 Nullifier events on Ethereum Mainnet
-  //   // Example range (adjust if needed based on actual data):
-  //   const startBlock = 14755920n;
-  //   const scanLimitBlocks = 5000n; // Limit how far we scan for this test
-  //   const endBlockSearch = startBlock + scanLimitBlocks;
-  //   let foundAndValidatedNullifier = false;
-    
-  //   console.log(`[Test] Starting Nullifier search from block ${startBlock}...`);
+    // Wait for the source to get its initial head
+    const startTime = Date.now();
+    const waitTimeout = 10000; // Increase timeout slightly for network latency
+    console.log("Waiting for RpcSource head initialization...");
+    while (rpcSource.head === 0n && Date.now() - startTime < waitTimeout) {
+      // The head update runs in the background, just wait
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (rpcSource.head === 0n) {
+      // Attempt one more explicit update just in case
+      // @ts-ignore // Accessing private method for test setup robustness
+      await rpcSource.updateHead();
+      if (rpcSource.head === 0n) {
+        rpcSource.destroy(); // Clean up if initialization failed
+        throw new Error(
+          `RpcSource head did not initialize within ${waitTimeout}ms`,
+        );
+      }
+    }
+    console.log(`RpcSource initialized with head: ${rpcSource.head}`);
+  });
 
-  //   // Get the iterator from the RpcSource
-  //   const iterator = await rpcSource.read(startBlock);
+  after(() => {
+    if (rpcSource) {
+      console.log("Destroying RpcSource...");
+      rpcSource.destroy();
+      console.log("RpcSource destroyed.");
+    }
+  });
 
-  //   // Loop through the yielded DataEntry items
-  //   for await (const entry of iterator) {
-  //       console.log(`[Test] Processing entry: Type=${entry.type}, Block=${entry.blockNumber}`);
+  // --- Keep the first test commented out or adapt similarly if needed ---
+  // it('should fetch and iterate through Nullifier events', async () => { ... });
 
-  //       // Stop if we've scanned beyond our test limit
-  //       if (entry.blockNumber > endBlockSearch) {
-  //           console.log(`[Test] Reached scan limit block ${endBlockSearch}, stopping.`);
-  //           break;
-  //       }
-
-  //       // Check if this entry is the type we are looking for
-  //       if (isNullifiersEntry(entry)) { // Use the type guard
-  //           console.log(`[Test] Found Nullifiers event at block ${entry.blockNumber}, tx ${entry.transactionHash}`);
-  //           foundAndValidatedNullifier = true;
-
-  //           // --- Perform Assertions ---
-  //           // 1. Standard DataEntry fields
-  //           assert.strictEqual(entry.type, RailgunEventType.Nullifiers, 'Entry type should be Nullifiers');
-  //           assert.strictEqual(entry.source, 'rpc', 'Source should be "rpc"');
-  //           assert.strictEqual(entry.completeness, DataCompleteness.BASIC, 'Completeness should be BASIC');
-  //           assert.ok(entry.blockNumber >= startBlock, `Block number ${entry.blockNumber} should be >= start block ${startBlock}`);
-  //           assert.ok(entry.transactionHash.startsWith('0x') && entry.transactionHash.length === 66, 'Transaction hash should be a valid 32-byte hex');
-  //           assert.ok(entry.logIndex >= 0, 'Log index should be >= 0');
-  //           assert.ok(entry.blockTimestamp > 1600000000, 'Block timestamp should be a plausible Unix timestamp'); // Simple sanity check
-  //           assert.strictEqual(entry.railgunTxid, undefined, 'RailgunTxid should be undefined for basic RPC');
-
-  //           // 2. Specific NullifiersPayload fields
-  //           const payload = entry.payload;
-  //           assert.ok(typeof payload.treeNumber === 'number' && payload.treeNumber >= 0, 'Payload treeNumber should be a non-negative number');
-  //           assert.ok(Array.isArray(payload.nullifiers), 'Payload nullifiers field must be an array');
-  //           assert.ok(payload.nullifiers.length > 0, 'Payload nullifiers array should not be empty');
-
-
-  //           console.log('PAYLOAD: ', payload);
-  //           // 3. Check the format of the first nullifier in the array
-  //           const firstNullifier = payload.nullifiers[0];
-  //           assert.ok(typeof firstNullifier === 'string', 'Nullifier should be a string');
-  //           assert.ok(firstNullifier.startsWith('0x'), 'Nullifier string should start with 0x');
-  //           assert.strictEqual(firstNullifier.length, 66, `Nullifier hex string length should be 66 (0x + 64 hex chars), but got ${firstNullifier.length}`);
-
-  //           console.log(`[Test] Successfully validated Nullifiers entry: ${JSON.stringify(entry, (_, v) => typeof v === 'bigint' ? v.toString() : v)}`);
-
-  //           break;
-  //       }
-  //   } 
-
-  //   assert.ok(foundAndValidatedNullifier, `Test failed: No Nullifiers event found and validated between blocks ${startBlock} and ${endBlockSearch}`);
-  // });
-
-
-  it('should fetch the first V1 Nullifier event at or after block 14755920', async () => {
+  it("should fetch the specific V1 Nullifier event at block 14755920 using ReadableStream", async () => {
     const targetBlock = 14755920n;
     let foundMatch = false;
-    // TARGET NULLIFIER
-    const expectedNullifier = "0x1e52cee52f67c37a468458671cddde6b56390dcbdc4cf3b770badc0e78d66401";
-    const maxBlocksToScan = 50n;
+    const expectedNullifier =
+      "0x1e52cee52f67c37a468458671cddde6b56390dcbdc4cf3b770badc0e78d66401";
+    // Limit scanning slightly beyond the target block just in case of timing issues or wanting the *first* after.
+    const maxBlocksToScan = 10n; // Scan target block + a few more
     const endScanBlock = targetBlock + maxBlocksToScan;
 
-    console.log(`[Test RPC Source] Starting search for Nullifier at/after block ${targetBlock}...`);
+    console.log(
+      `[Test Stream] Starting search for Nullifier ${expectedNullifier} at block ${targetBlock}...`,
+    );
 
+    // Get the ReadableStream from the RpcSource
+    // Pass the desired event type to potentially optimize fetching if implemented
+    const stream = await rpcSource.read(targetBlock, [
+      RailgunEventType.Nullifiers,
+    ]);
 
-    const iterator = await rpcSource.read(targetBlock);
+    // Use for await...of directly on the stream (Node.js supports this)
+    for await (const entry of stream) {
+      console.log(
+        `[Test Stream] Processing entry: Type=${entry.type}, Block=${entry.blockNumber}, LogIndex=${entry.logIndex}`,
+      );
 
-    for await (const entry of iterator) {
-        console.log(`[Test RPC Source] Processing entry: Type=${entry.type}, Block=${entry.blockNumber}`);
+      // Stop searching if we go too far past the target block
+      if (entry.blockNumber > endScanBlock) {
+        console.log(
+          `[Test Stream] Scanned up to block ${entry.blockNumber} (> ${endScanBlock}), stopping search.`,
+        );
+        break; // Exit the loop
+      }
 
-         if (entry.blockNumber > endScanBlock) {
-            console.log(`[Test RPC Source] Scanned up to block ${entry.blockNumber}, stopping search.`);
-            break;
-        }
+      // We requested only Nullifiers, but double-check the type guard just to be safe
+      if (isNullifiersEntry(entry)) {
+        console.log(
+          `[Test Stream] Found Nullifiers entry at block ${entry.blockNumber}, tx ${entry.transactionHash}`,
+        );
 
-        // Check if it's a nullifier at or after the target block
-        if (entry.blockNumber >= targetBlock && isNullifiersEntry(entry)) {
+        // Check if it's the exact block and nullifier we want
+        if (entry.blockNumber === targetBlock) {
+          const payload = entry.payload;
+          // Find if the *expected* nullifier is in the payload's array
+          const foundExpectedInPayload =
+            payload.nullifiers.includes(expectedNullifier);
+
+          if (foundExpectedInPayload) {
+            console.log(
+              `[Test Stream] Found expected Nullifier ${expectedNullifier} in payload at block ${targetBlock}. Validating...`,
+            );
             foundMatch = true;
-            console.log('RPC SOURCE TARGET: ', entry);
-            console.log(`[Test RPC Source] Found Nullifiers entry at block ${entry.blockNumber}, tx ${entry.transactionHash}`);
 
-            // --- Assertions ---
-            assert.strictEqual(entry.type, RailgunEventType.Nullifiers);
-            assert.strictEqual(entry.source, 'rpc');
-            assert.strictEqual(entry.completeness, DataCompleteness.BASIC); // << TODO: double triple check on what kind of data should be defined here
-            assert.ok(entry.blockNumber >= targetBlock);
-            assert.ok(entry.transactionHash.startsWith('0x') && entry.transactionHash.length === 66);
-            assert.ok(entry.logIndex >= 0); // RPC provides logIndex
-            assert.ok(entry.blockTimestamp > 0);
-            assert.strictEqual(entry.railgunTxid, undefined);
+            // --- Perform Assertions ---
+            assert.strictEqual(
+              entry.type,
+              RailgunEventType.Nullifiers,
+              "Entry type should be Nullifiers",
+            );
+            assert.strictEqual(entry.source, "rpc", 'Source should be "rpc"');
+            assert.strictEqual(
+              entry.completeness,
+              DataCompleteness.BASIC,
+              "Completeness should be BASIC",
+            );
+            assert.strictEqual(
+              entry.blockNumber,
+              targetBlock,
+              `Block number should be the target block ${targetBlock}`,
+            );
+            assert.ok(
+              entry.transactionHash.startsWith("0x") &&
+                entry.transactionHash.length === 66,
+              "Transaction hash format invalid",
+            );
+            assert.ok(
+              typeof entry.logIndex === "number" && entry.logIndex >= 0,
+              "Log index should be a non-negative number",
+            );
+            assert.ok(
+              typeof entry.blockTimestamp === "number" &&
+                entry.blockTimestamp > 1600000000,
+              "Block timestamp seems invalid",
+            ); // Basic sanity check
+            assert.strictEqual(
+              entry.railgunTxid,
+              undefined,
+              "RailgunTxid should be undefined for basic RPC",
+            );
 
-            const payload = entry.payload;
-            assert.ok(typeof payload.treeNumber === 'number');
-            assert.ok(Array.isArray(payload.nullifiers) && payload.nullifiers.length === 1);
+            assert.ok(
+              typeof payload.treeNumber === "number",
+              "Payload treeNumber should be a number",
+            );
+            assert.ok(
+              Array.isArray(payload.nullifiers) &&
+                payload.nullifiers.length > 0,
+              "Payload nullifiers array invalid or empty",
+            );
 
-            const nullifierHex = payload.nullifiers[0];
-            assert.strictEqual(typeof nullifierHex, 'string');
-            assert.ok(nullifierHex.startsWith('0x'));
-            assert.strictEqual(nullifierHex.length, 66);
+            // Validate format of the specific nullifier found
+            const foundNullifier = payload.nullifiers.find(
+              (n) => n === expectedNullifier,
+            );
+            assert.ok(
+              foundNullifier,
+              "Expected nullifier string not actually found in array after includes check?",
+            ); // Should not fail if includes worked
+            assert.strictEqual(
+              typeof foundNullifier,
+              "string",
+              "Nullifier should be a string",
+            );
+            assert.ok(
+              foundNullifier.startsWith("0x"),
+              "Nullifier string should start with 0x",
+            );
+            assert.strictEqual(
+              foundNullifier.length,
+              66,
+              `Nullifier hex string length should be 66`,
+            );
 
-            // Crucially, check if it matches the expected nullifier from the target block
-            if (entry.blockNumber === targetBlock && nullifierHex === expectedNullifier) {
-                 console.log(`[Test RPC Source] Nullifier ${nullifierHex} matches expected value for block ${targetBlock}. Validation successful.`);
-                 // Stop as soon as we find the specific nullifier we were looking for
-                 break;
-            } else if (entry.blockNumber === targetBlock) {
-                 console.warn(`[Test RPC Source] Found nullifier ${nullifierHex} in target block, but it wasn't the expected ${expectedNullifier}. Continuing search...`);
-                 foundMatch = false; // Reset flag as we haven't found the *exact* one yet
-            } else {
-                // Found a nullifier after the target block, validation is still good, stop.
-                 console.log(`[Test RPC Source] Validation successful for nullifier after target block. Stopping iteration.`);
-                 break;
-            }
+            console.log(
+              `[Test Stream] Successfully validated Nullifiers entry: ${JSON.stringify(entry, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2)}`,
+            );
+
+            // We found the exact entry we wanted, stop iterating.
+            break; // Exit the for await loop
+          } else {
+            console.log(
+              `[Test Stream] Found Nullifiers event in block ${targetBlock}, but it did not contain the expected nullifier ${expectedNullifier}. Payload:`,
+              payload.nullifiers,
+            );
+            // Continue searching within the block or subsequent blocks up to the limit
+          }
+        } else {
+          console.log(
+            `[Test Stream] Found Nullifiers event at block ${entry.blockNumber} (after target). Skipping detailed validation for this test's purpose.`,
+          );
+          // If you wanted the *first* nullifier *at or after*, you could validate and break here too.
+          // For this specific test targeting block 14755920, we continue until we find it or exceed the scan limit.
         }
-    }
+      } else {
+        // This shouldn't happen if the eventTypes filter worked, but good to log if it does.
+        console.warn(
+          `[Test Stream] Received unexpected entry type: ${entry.type} at block ${entry.blockNumber}`,
+        );
+      }
+    } // End for await loop
 
-    assert.ok(foundMatch, `Test failed: Expected Nullifier ${expectedNullifier} not found and validated at or after block ${targetBlock} within ${maxBlocksToScan} blocks`);
+    // Final assertion after the loop finishes (or breaks)
+    assert.ok(
+      foundMatch,
+      `Test failed: Expected Nullifier ${expectedNullifier} was not found and validated in block ${targetBlock} (scanned up to ${endScanBlock})`,
+    );
   });
 });
