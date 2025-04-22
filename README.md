@@ -1,4 +1,5 @@
-### Railgun Scanner 
+### [wip] RAILGUN Scanner 
 
 
-Simple scanner for Legacy events
+tweaking and experimenting fast ways to sync data from chain across different sources
+
