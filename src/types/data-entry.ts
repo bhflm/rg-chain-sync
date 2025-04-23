@@ -68,6 +68,23 @@ interface ShieldPayload {
   fees: bigint[]; // Array of fees matching commitments
 }
 
+// Interface for Transact event payload
+interface TransactPayload {
+  treeNumber: number;
+  startPosition: number;
+  commitments: {
+    hash: Hex;
+    index: number;
+    ciphertext?: {
+      data: readonly Hash[];
+      blindedSenderViewingKey: Hash;
+      blindedReceiverViewingKey: Hash;
+      annotationData: string;
+      memo: string;
+    };
+  }[];
+}
+
 
 // base entry shared across all data sources ??
 interface BaseDataEntry {
@@ -137,9 +154,16 @@ export type DataEntry =
       type: RailgunEventType.Shield;
       payload: ShieldPayload;
     }
+   | BaseDataEntry & {
+      type: RailgunEventType.Transact;
+      payload: TransactPayload;
+    }
+   | BaseDataEntry & {
+      type: RailgunEventType.GeneratedCommitmentBatch;
+      payload: CommitmentBatchPayload; // Reuse the CommitmentBatchPayload structure
+    }
     // blablabla
   // | BaseDataEntry & { type: RailgunEventType.V1_CommitmentBatch; payload: V1CommitmentBatchPayload; }
-  // | BaseDataEntry & { type: RailgunEventType.Transact; payload: TransactPayload; }
   // ... etc.
 ;
 
@@ -158,4 +182,12 @@ export function isUnshieldEntry(entry: DataEntry): entry is BaseDataEntry & { ty
 
 export function isShieldEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.Shield; payload: ShieldPayload } {
     return entry.type === RailgunEventType.Shield;
+}
+
+export function isTransactEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.Transact; payload: TransactPayload } {
+    return entry.type === RailgunEventType.Transact;
+}
+
+export function isGeneratedCommitmentBatchEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.GeneratedCommitmentBatch; payload: CommitmentBatchPayload } {
+    return entry.type === RailgunEventType.GeneratedCommitmentBatch;
 }
