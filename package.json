@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "npm run build && node --test ./test/aggregator.spec.js",
+    "test": "npm run build && node --test ./test/rpc.spec.js",
     "clean": "tsc --build --clean"
   },
   "dependencies": {
