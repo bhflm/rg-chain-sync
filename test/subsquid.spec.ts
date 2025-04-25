@@ -52,9 +52,7 @@ describe("SubsquidSource", () => {
     );
 
     // Get the iterator, starting from the target block
-    const iterator = await subsquidSource.read(targetBlock, [
-      RailgunEventType.Nullifiers,
-    ]);
+    const iterator = await subsquidSource.read(targetBlock);
 
     // Iterate through the results
     for await (const entry of iterator) {

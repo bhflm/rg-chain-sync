@@ -56,10 +56,7 @@ export class SubsquidSource implements DataSource {
     }
   }
 
-  async read(
-    height: bigint,
-    eventTypes?: RailgunEventType[],
-  ): Promise<AsyncIterableIterator<DataEntry>> {
+  async read(height: bigint): Promise<AsyncIterableIterator<DataEntry>> {
     const self = this;
     await self.updateHead();
 
@@ -69,24 +66,7 @@ export class SubsquidSource implements DataSource {
     let done = false;
     let lastProcessedBlock = height - 1n;
 
-    if (!hasQueries(eventTypes)) {
-      console.warn(
-        "SubsquidSource: No relevant event types requested for read().",
-      );
-      return Promise.resolve({
-        async next() {
-          return { done: true, value: undefined };
-        },
-        [Symbol.asyncIterator]() {
-          return this;
-        },
-      });
-    }
-
-    const capturedEventTypes = eventTypes;
-    //////////
     console.log("Target block: ", height);
-    console.log("eventTypes: ", eventTypes);
 
     const iterableIterator: AsyncIterableIterator<DataEntry> = {
       async next(): Promise<IteratorResult<DataEntry>> {
@@ -119,7 +99,17 @@ export class SubsquidSource implements DataSource {
             console.log("tryindex: ", bufferIndex);
             console.log("try currentBatchEntries: ", currentBatchEntries);
 
-            const queries = buildEventQueries(capturedEventTypes!, {
+            // @@ TODO: Highly experimental, I have no clue yet how to fetch all things happening inside a block number in terms of how subsquid decodes it
+            const capturedEventTypes = [
+              RailgunEventType.CommitmentBatch,
+              RailgunEventType.GeneratedCommitmentBatch,
+              RailgunEventType.Nullifiers,
+              RailgunEventType.Shield,
+              RailgunEventType.Unshield,
+              RailgunEventType.Transact,
+            ];
+
+            const queries = buildEventQueries(capturedEventTypes, {
               height: Number(height),
               batchSize: self.batchSize,
               offset: 0,
@@ -131,10 +121,13 @@ export class SubsquidSource implements DataSource {
 
             console.log("RESULT: ", result);
 
-            // Extract nullifiers from result, handling potential undefined fields
             const fetchedNullifiers = ((result as any).nullifiers ||
               []) as SubsquidNullifierData[]; // Use local type for safety
-            // const fetchedCommitments = (result.commitments || []) as SubsquidCommitmentData[]; // example
+            // const transacts = ((result as any).transacts) || []) as SubsquidTransactData;
+            // const unshields = ((result as any).unshields || []) as SubsquidUnshieldsData;
+            // const shields = ((results as any).shields || []) as SubsquidShieldsData;
+            // const generatedCommitmentBatches = ((result as any).generatedCommitmentBatch || []) as SubsquidGeneratedCommitmentsBatchData;
+            // const commitmentBatch = ((result as any).commitmentBatch || []) as SubsquidCommitmentBatchData;
 
             const itemsInThisFetch = fetchedNullifiers.length; // + fetchedCommitments.length // Adjust if querying multiple
             let anyDataFetched = itemsInThisFetch > 0;

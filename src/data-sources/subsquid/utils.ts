@@ -4,7 +4,7 @@ import { RailgunEventType } from "../../types/data-entry";
 //   V1_GeneratedCommitmentBatch = 'GeneratedCommitmentBatch_V1',
 //   V1_CommitmentBatch = 'CommitmentBatch_V1',
 //   V1_Nullifiers = 'Nullifiers_V1',
-//   CommitmentBatch = 'CommitmentBatch', 
+//   CommitmentBatch = 'CommitmentBatch',
 //   GeneratedCommitmentBatch = 'GeneratedCommitmentBatch', // V2/V2-Legacy (if args match)
 //   Nullifiers = 'Nullifiers',             // V2/V2-Legacy (if args match) - NOTE: V1/V2 names clash! Renamed V1 above.
 //   Shield = 'Shield',
@@ -13,9 +13,13 @@ import { RailgunEventType } from "../../types/data-entry";
 // }
 
 export const hasQueries = (eventTypes?: RailgunEventType[]) => {
-  const queryNullifiers = !eventTypes || eventTypes.includes(RailgunEventType.Nullifiers);
-  const queryCommitmentBatch = !eventTypes || eventTypes.includes(RailgunEventType.CommitmentBatch);
-  const queryGeneratedCommitmentBatch = !eventTypes || eventTypes.includes(RailgunEventType.GeneratedCommitmentBatch);
+  const queryNullifiers =
+    !eventTypes || eventTypes.includes(RailgunEventType.Nullifiers);
+  const queryCommitmentBatch =
+    !eventTypes || eventTypes.includes(RailgunEventType.CommitmentBatch);
+  const queryGeneratedCommitmentBatch =
+    !eventTypes ||
+    eventTypes.includes(RailgunEventType.GeneratedCommitmentBatch);
 
   const queryFlags = {
     queryNullifiers,
@@ -23,7 +27,7 @@ export const hasQueries = (eventTypes?: RailgunEventType[]) => {
     queryGeneratedCommitmentBatch,
   };
 
-  return Object.values(queryFlags).some(flag => flag);
+  return Object.values(queryFlags).some((flag) => flag);
 };
 
 interface QueryOptions {
@@ -32,57 +36,53 @@ interface QueryOptions {
   offset?: number;
 }
 
-const commonFields = [
-  'id',
-  'blockNumber',
-  'blockTimestamp',
-  'transactionHash',
-];
+const commonFields = ["id", "blockNumber", "blockTimestamp", "transactionHash"];
 
-const getDefaultFields = (eventType: RailgunEventType): string[] => {
+const getDefaultFields = (
+  eventType: RailgunEventType,
+): Array<string | Record<string, string[]>> => {
   switch (eventType) {
     case RailgunEventType.Nullifiers:
-      return [
-        ...commonFields,
-        'treeNumber',
-        'nullifier'
-      ];
+      return [...commonFields, "treeNumber", "nullifier"];
     case RailgunEventType.CommitmentBatch:
     case RailgunEventType.GeneratedCommitmentBatch:
       return [
         ...commonFields,
-        'treeNumber',
-        'batchStartTreePosition',
-        'treePosition',
-        'commitmentType',
-        'hash'
+        "treeNumber",
+        "batchStartTreePosition",
+        "treePosition",
+        "commitmentType",
+        "hash",
       ];
     case RailgunEventType.Shield:
       return [
         ...commonFields,
-        'treeNumber',
-        'batchStartTreePosition',
-        'treePosition',
-        'commitmentType',
-        'hash'
+        "treeNumber",
+        "batchStartTreePosition",
+        "treePosition",
+        "commitmentType",
+        "hash",
       ];
     case RailgunEventType.Unshield:
       return [
         ...commonFields,
-        'to',
-        'token',
-        'amount',
-        'fee',
-        'eventLogIndex'
+        "to",
+        "amount",
+        "fee",
+        "eventLogIndex",
+        "token.id",
+        "token.tokenAddress",
+        "token.tokenSubID",
+        "token.tokenType",
       ];
     case RailgunEventType.Transact:
       return [
         ...commonFields,
-        'treeNumber',
-        'batchStartTreePosition',
-        'treePosition',
-        'commitmentType',
-        'hash'
+        "treeNumber",
+        "batchStartTreePosition",
+        "treePosition",
+        "commitmentType",
+        "hash",
       ];
     default:
       return [];
@@ -92,16 +92,16 @@ const getDefaultFields = (eventType: RailgunEventType): string[] => {
 const getEntityName = (eventType: RailgunEventType) => {
   switch (eventType) {
     case RailgunEventType.Nullifiers:
-      return 'nullifiers';
+      return "nullifiers";
     case RailgunEventType.CommitmentBatch:
     case RailgunEventType.GeneratedCommitmentBatch:
-      return 'shieldCommitments';
+      return "shieldCommitments";
     case RailgunEventType.Shield:
-      return 'shieldCommitments';
+      return "shieldCommitments";
     case RailgunEventType.Unshield:
-      return 'unshields';
+      return "unshields";
     case RailgunEventType.Transact:
-      return 'transactCommitments';
+      return "transactCommitments";
     default:
       throw new Error(`Unknown event type: ${eventType}`);
   }
@@ -109,7 +109,7 @@ const getEntityName = (eventType: RailgunEventType) => {
 
 export const buildEventQuery = (
   eventType: RailgunEventType,
-  options: QueryOptions
+  options: QueryOptions,
 ) => {
   const entityName = getEntityName(eventType);
   const defaultFields = getDefaultFields(eventType);
@@ -118,32 +118,23 @@ export const buildEventQuery = (
     [entityName]: {
       fields: defaultFields,
       where: {
-        blockNumber_gte: options.height.toString()
+        blockNumber_gte: options.height.toString(),
       },
       limit: options.batchSize,
       offset: options.offset || 0,
       // orderBy: undefined // This should now match the expected type
-    }
+    },
   };
 };
 
 export const buildEventQueries = (
   eventTypes: RailgunEventType[],
-  options: QueryOptions
+  options: QueryOptions,
 ) => {
   return eventTypes.reduce((queries, eventType) => {
     return {
       ...queries,
-      ...buildEventQuery(eventType, options)
+      ...buildEventQuery(eventType, options),
     };
   }, {});
 };
-
-const queries = buildEventQueries(
-  [RailgunEventType.Nullifiers, RailgunEventType.Shield],
-  {
-    height: 4000000,
-    batchSize: 100,
-    offset: 0
-  }
-);
