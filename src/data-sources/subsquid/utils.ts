@@ -1,140 +1,160 @@
 import { RailgunEventType } from "../../types/data-entry";
 
-// export enum RailgunEventType {
-//   V1_GeneratedCommitmentBatch = 'GeneratedCommitmentBatch_V1',
-//   V1_CommitmentBatch = 'CommitmentBatch_V1',
-//   V1_Nullifiers = 'Nullifiers_V1',
-//   CommitmentBatch = 'CommitmentBatch',
-//   GeneratedCommitmentBatch = 'GeneratedCommitmentBatch', // V2/V2-Legacy (if args match)
-//   Nullifiers = 'Nullifiers',             // V2/V2-Legacy (if args match) - NOTE: V1/V2 names clash! Renamed V1 above.
-//   Shield = 'Shield',
-//   Unshield = 'Unshield',
-//   Transact = 'Transact', // V2/V2-Legacy
-// }
+// this is not ideal and should be replaced in favor of using .query() once we fix https://github.com/railgun-reloaded/subsquid-client/pull/21
+export const buildBlockRangeRawGQLQuery = (fromBlock: bigint, toBlock: bigint, batchSize: number): string => {
+  const fromBlockStr = fromBlock.toString();
+  const toBlockStr = toBlock.toString();
+  const limit = batchSize.toString();
 
-export const hasQueries = (eventTypes?: RailgunEventType[]) => {
-  const queryNullifiers =
-    !eventTypes || eventTypes.includes(RailgunEventType.Nullifiers);
-  const queryCommitmentBatch =
-    !eventTypes || eventTypes.includes(RailgunEventType.CommitmentBatch);
-  const queryGeneratedCommitmentBatch =
-    !eventTypes ||
-    eventTypes.includes(RailgunEventType.GeneratedCommitmentBatch);
+  return `
+query RailgunEvents {
+  # Transactions for TXID correlation
+  transactions(
+    where: {blockNumber_gte: "${fromBlockStr}", blockNumber_lte: "${toBlockStr}"}
+    orderBy: [blockNumber_ASC, transactionHash_ASC]
+    limit: ${limit}
+  ) {
+    id
+    blockNumber
+    transactionHash
+  }
 
-  const queryFlags = {
-    queryNullifiers,
-    queryCommitmentBatch,
-    queryGeneratedCommitmentBatch,
-  };
+  # Nullifiers
+  nullifiers(
+    where: {blockNumber_gte: "${fromBlockStr}", blockNumber_lte: "${toBlockStr}"}
+    orderBy: [blockNumber_ASC, transactionHash_ASC]
+    limit: ${limit}
+  ) {
+    id
+    blockNumber
+    blockTimestamp
+    transactionHash
+    treeNumber
+    nullifier
+  }
 
-  return Object.values(queryFlags).some((flag) => flag);
-};
+  # Unshields
+  unshields(
+    where: {blockNumber_gte: "${fromBlockStr}", blockNumber_lte: "${toBlockStr}"}
+    orderBy: [blockNumber_ASC, transactionHash_ASC, eventLogIndex_ASC]
+    limit: ${limit}
+  ) {
+    id
+    blockNumber
+    blockTimestamp
+    transactionHash
+    to
+    token {
+      id
+      tokenType
+      tokenAddress
+      tokenSubID
+    }
+    amount
+    fee
+    eventLogIndex
+  }
 
-interface QueryOptions {
-  height: number;
-  batchSize: number;
-  offset?: number;
+  # All commitment types
+  commitments(
+    where: {blockNumber_gte: "${fromBlockStr}", blockNumber_lte: "${toBlockStr}"}
+    orderBy: [blockNumber_ASC, transactionHash_ASC, treePosition_ASC]
+    limit: ${limit}
+  ) {
+    id
+    blockNumber
+    blockTimestamp
+    transactionHash
+    treeNumber
+    batchStartTreePosition
+    treePosition
+    commitmentType
+    hash
+    __typename
+
+    # Fields for different commitment types
+    ... on LegacyGeneratedCommitment {
+      preimage {
+        id
+        npk
+        value
+        token {
+          id
+          tokenType
+          tokenAddress
+          tokenSubID
+        }
+      }
+      encryptedRandom
+    }
+
+    ... on LegacyEncryptedCommitment {
+      legacyCiphertext: ciphertext {
+        id
+        ephemeralKeys
+        legacyMemo: memo
+        legacyCiphertextData: ciphertext {
+          id
+          iv
+          tag
+          data
+        }
+      }
+    }
+
+    ... on ShieldCommitment {
+      preimage {
+        id
+        npk
+        value
+        token {
+          id
+          tokenType
+          tokenAddress
+          tokenSubID
+        }
+      }
+      encryptedBundle
+      shieldKey
+      fee
+    }
+
+    ... on TransactCommitment {
+      transactCiphertext: ciphertext {
+        id
+        blindedSenderViewingKey
+        blindedReceiverViewingKey
+        annotationData
+        transactMemo: memo
+        transactCiphertextData: ciphertext {
+          id
+          iv
+          tag
+          data
+        }
+      }
+    }
+  }
 }
+`;
+};
 
-const commonFields = ["id", "blockNumber", "blockTimestamp", "transactionHash"];
-
-const getDefaultFields = (
-  eventType: RailgunEventType,
-): Array<string | Record<string, string[]>> => {
-  switch (eventType) {
-    case RailgunEventType.Nullifiers:
-      return [...commonFields, "treeNumber", "nullifier"];
-    case RailgunEventType.CommitmentBatch:
-    case RailgunEventType.GeneratedCommitmentBatch:
-      return [
-        ...commonFields,
-        "treeNumber",
-        "batchStartTreePosition",
-        "treePosition",
-        "commitmentType",
-        "hash",
-      ];
-    case RailgunEventType.Shield:
-      return [
-        ...commonFields,
-        "treeNumber",
-        "batchStartTreePosition",
-        "treePosition",
-        "commitmentType",
-        "hash",
-      ];
-    case RailgunEventType.Unshield:
-      return [
-        ...commonFields,
-        "to",
-        "amount",
-        "fee",
-        "eventLogIndex",
-        "token.id",
-        "token.tokenAddress",
-        "token.tokenSubID",
-        "token.tokenType",
-      ];
-    case RailgunEventType.Transact:
-      return [
-        ...commonFields,
-        "treeNumber",
-        "batchStartTreePosition",
-        "treePosition",
-        "commitmentType",
-        "hash",
-      ];
-    default:
-      return [];
+// Helper to check if specific event types are requested
+export const hasQueries = (eventTypes?: RailgunEventType[]): boolean => {
+  // If no event types specified, we query everything
+  if (!eventTypes || eventTypes.length === 0) {
+    return true;
   }
-};
 
-const getEntityName = (eventType: RailgunEventType) => {
-  switch (eventType) {
-    case RailgunEventType.Nullifiers:
-      return "nullifiers";
-    case RailgunEventType.CommitmentBatch:
-    case RailgunEventType.GeneratedCommitmentBatch:
-      return "shieldCommitments";
-    case RailgunEventType.Shield:
-      return "shieldCommitments";
-    case RailgunEventType.Unshield:
-      return "unshields";
-    case RailgunEventType.Transact:
-      return "transactCommitments";
-    default:
-      throw new Error(`Unknown event type: ${eventType}`);
-  }
-};
+  // Check if any of the specified event types are ones we support
+  const supportedTypes = [
+    RailgunEventType.Nullifiers,
+    RailgunEventType.Unshield,
+    RailgunEventType.Shield,
+    RailgunEventType.Transact,
+    RailgunEventType.CommitmentBatch,
+    RailgunEventType.GeneratedCommitmentBatch
+  ];
 
-export const buildEventQuery = (
-  eventType: RailgunEventType,
-  options: QueryOptions,
-) => {
-  const entityName = getEntityName(eventType);
-  const defaultFields = getDefaultFields(eventType);
-
-  return {
-    [entityName]: {
-      fields: defaultFields,
-      where: {
-        blockNumber_gte: options.height.toString(),
-      },
-      limit: options.batchSize,
-      offset: options.offset || 0,
-      // orderBy: undefined // This should now match the expected type
-    },
-  };
-};
-
-export const buildEventQueries = (
-  eventTypes: RailgunEventType[],
-  options: QueryOptions,
-) => {
-  return eventTypes.reduce((queries, eventType) => {
-    return {
-      ...queries,
-      ...buildEventQuery(eventType, options),
-    };
-  }, {});
+  return eventTypes.some(type => supportedTypes.includes(type));
 };
