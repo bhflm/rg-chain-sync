@@ -16,7 +16,7 @@
     "clean": "tsc --build --clean"
   },
   "dependencies": {
-    "@railgun-reloaded/subsquid-client": "github:railgun-reloaded/subsquid-client",
+    "@railgun-reloaded/subsquid-client": "github:railgun-reloaded/subsquid-client#fix/nested-query-entities",
     "viem": "^2.26.2"
   }
 }
