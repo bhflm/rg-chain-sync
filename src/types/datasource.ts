@@ -1,18 +1,5 @@
 import { DataEntry, RailgunEventType } from "./data-entry";
 
-
-// Use this to set a fixed _level_ of data desired to be fetched from several data sources
-// The responsibility of using inner data from this is previously set by design 
-// So you can't expect to fetch a full spectrum of data if you're waiting for BASIC 
-export enum DataCompleteness {
-  // Contains only data available from public RPCs (may lack RAILGUN txId or internal tx data)
-  BASIC = 'basic',  // Contains full data including traced internal transactions
-  COMPLETE = 'complete',
-  
-  // Contains verified data that has been checked against on-chain merkle roots
-  VERIFIED = 'verified'
-};
-
 export interface Data {
   blockNumber: number;
   height: bigint;

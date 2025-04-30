@@ -1,7 +1,6 @@
 // src/types/data-entry.ts
 
 import { type Address, type Hash, type Hex } from 'viem';
-import { DataCompleteness } from './datasource';
 
 
 export enum RailgunEventType {
@@ -22,9 +21,34 @@ interface CommitmentBatchPayload {
   commitments: {
     hash: Hex;
     index: number; // Global index within the tree
-    // Optional: Include raw ciphertext/preimage if needed downstream,
-    // but might bloat the object. Decide based on need.
-    // rawCiphertext?: any; // Example if needed later
+    // For LegacyEncryptedCommitment
+    ciphertext?: {
+      ephemeralKeys: Hash[];
+      memo: string;
+      data: Hash[];
+      iv: Hash;
+      tag: Hash;
+    };
+  }[];
+}
+
+// Updated payload for GeneratedCommitmentBatch to include preimage and encryptedRandom
+interface GeneratedCommitmentBatchPayload {
+  treeNumber: number;
+  startPosition: number;
+  commitments: {
+    hash: Hex;
+    index: number; // Global index within the tree
+    preimage: {
+      npk: Hex;
+      token: {
+        tokenType: number;
+        tokenAddress: Address;
+        tokenSubID: bigint;
+      };
+      value: bigint;
+    };
+    encryptedRandom: Hash[] | [Hash, Hash] | bigint[];
   }[];
 }
 
@@ -62,8 +86,9 @@ interface ShieldPayload {
       };
       value: bigint;
     };
-    // Raw encrypted bundle/shield key might be useful sometimes
-    // rawCiphertext?: { encryptedBundle: Hex[], shieldKey: Hex };
+    // For ShieldCommitment - these are optional to allow for both RPC and Subsquid adapters
+    encryptedBundle?: Hash[];
+    shieldKey?: Hash;
   }[];
   fees: bigint[]; // Array of fees matching commitments
 }
@@ -76,7 +101,7 @@ interface TransactPayload {
     hash: Hex;
     index: number;
     ciphertext?: {
-      data: readonly Hash[];
+      data: Hash[] | readonly Hash[];
       blindedSenderViewingKey: Hash;
       blindedReceiverViewingKey: Hash;
       annotationData: string;
@@ -98,8 +123,6 @@ interface BaseDataEntry {
   logIndex: number;
   /** Block timestamp (seconds since epoch) - Crucial for ordering */
   blockTimestamp: number;
-  /** Indicator of data completeness/quality */
-  completeness: DataCompleteness;
   /** Optional: RAILGUN transaction ID (often only from Subsquid/processed data) */
   railgunTxid?: string; // Usually undefined for raw RPC
   // have logs ???
@@ -160,7 +183,7 @@ export type DataEntry =
     }
    | BaseDataEntry & {
       type: RailgunEventType.GeneratedCommitmentBatch;
-      payload: CommitmentBatchPayload; // Reuse the CommitmentBatchPayload structure
+      payload: GeneratedCommitmentBatchPayload; // Use the new dedicated payload type
     }
     // blablabla
   // | BaseDataEntry & { type: RailgunEventType.V1_CommitmentBatch; payload: V1CommitmentBatchPayload; }
@@ -188,6 +211,6 @@ export function isTransactEntry(entry: DataEntry): entry is BaseDataEntry & { ty
     return entry.type === RailgunEventType.Transact;
 }
 
-export function isGeneratedCommitmentBatchEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.GeneratedCommitmentBatch; payload: CommitmentBatchPayload } {
+export function isGeneratedCommitmentBatchEntry(entry: DataEntry): entry is BaseDataEntry & { type: RailgunEventType.GeneratedCommitmentBatch; payload: GeneratedCommitmentBatchPayload } {
     return entry.type === RailgunEventType.GeneratedCommitmentBatch;
 }

@@ -4,7 +4,6 @@ import assert from "node:assert";
 import { RpcSource } from "../src/data-sources/rpc/";
 import { RailgunEventType, isNullifiersEntry } from "../src/types/data-entry";
 import { NetworkName } from "../src/config/network-config";
-import { DataCompleteness } from "../src/types/datasource";
 import { DataEntry } from "../src/types/data-entry";
 
 const API_KEY = process.env.API_KEY;
