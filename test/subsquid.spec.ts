@@ -13,6 +13,9 @@ import {
 } from "../src/types/data-entry";
 import { DataCompleteness } from "../src/types/datasource";
 
+
+const BATCH_SIZE_FOR_TESTING = 50;
+
 describe("SubsquidSource Integration", () => {
   let subsquidSource: SubsquidSource;
 
@@ -20,7 +23,7 @@ describe("SubsquidSource Integration", () => {
     // Initialize the SubsquidSource
     subsquidSource = new SubsquidSource({
       network: "ethereum",
-      batchSize: 100,
+      batchSize: 500,
     });
 
     // Wait for head initialization
@@ -41,10 +44,72 @@ describe("SubsquidSource Integration", () => {
     }
   });
 
+
+  // Init
+  it("should have initialized the head property", () => {
+    assert.ok(subsquidSource.head > 0n, `Head should be > 0, got ${subsquidSource.head}`);
+  });
+
+  it("should report syncing as true initially", () => {
+    assert.strictEqual(subsquidSource.syncing, true, "Should be syncing initially");
+  });
+
+
   it("should fetch and validate Nullifier events", async () => {
     const targetBlock = 14755920n;
     await testEventType(targetBlock, RailgunEventType.Nullifiers, validateNullifierEvent);
   });
+
+  // Core iteration && Pagination
+  it("read should return a valid AsyncIterableIterator", async () => {
+    const targetBlock = 14755920n;
+    const iterator = await subsquidSource.read(targetBlock);
+    assert.ok(iterator, "Iterator should be returned");
+    assert.strictEqual(typeof iterator.next, "function", "Iterator should have next method");
+    assert.strictEqual(typeof iterator[Symbol.asyncIterator], "function", "Iterator should be async iterable");
+  });
+
+
+  it("read(startBlock) should yield the first event at or after startBlock", async () => {
+    const targetBlock = 14755920n;
+    const iterator = await subsquidSource.read(targetBlock);
+    const { value, done } = await iterator.next();
+    assert.strictEqual(done, false, "Iterator should not be done immediately");
+    assert.ok(value, "Iterator should yield a value");
+    assert.ok(value.blockNumber >= targetBlock, `First yielded block ${value.blockNumber} should be >= start block ${targetBlock}`);
+  });
+
+  it("should yield events chronologically (blockNumber, then secondary sort)", async () => {
+    const targetBlock = 14755920n;
+    const startBlock = targetBlock - 1n; // Start slightly before
+    const endBlock = targetBlock + 1n; // Scan a small range
+    const iterator = await subsquidSource.read(startBlock);
+    let lastBlock = 0n;
+    let lastSecondaryKey = ""; // Use txHash or logIndex string
+    let count = 0;
+
+    for await (const entry of iterator) {
+        if (entry.blockNumber > endBlock) break;
+        if (entry.blockNumber < startBlock) continue; // Skip blocks before range if any yielded
+
+        assert.ok(entry.blockNumber >= lastBlock, `Block number decreased: ${entry.blockNumber} < ${lastBlock}`);
+        if (entry.blockNumber === lastBlock) {
+            // Simple txHash comparison as secondary sort key (adapt if logIndex is reliable)
+            const currentSecondaryKey = entry.transactionHash + (entry.logIndex > -1 ? `-${entry.logIndex}` : '');
+            assert.ok(currentSecondaryKey >= lastSecondaryKey, `Secondary sort key decreased within block ${entry.blockNumber}: ${currentSecondaryKey} < ${lastSecondaryKey}`);
+            lastSecondaryKey = currentSecondaryKey;
+        } else {
+            lastBlock = entry.blockNumber;
+            lastSecondaryKey = entry.transactionHash + (entry.logIndex > -1 ? `-${entry.logIndex}` : ''); // Reset secondary key
+        }
+        count++;
+        if (count >= BATCH_SIZE_FOR_TESTING * 2) break; // Don't run forever
+    }
+    assert.ok(count > 0, "Should have yielded at least one event in the range");
+  }); // Longer timeout for potentially multiple fetches
+
+
+  // Events validation
 
   // it("should fetch and validate Unshield events", async () => {
   //   const targetBlock = 14755920n;
