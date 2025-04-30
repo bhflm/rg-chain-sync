@@ -1,6 +1,5 @@
 import { Hash, Hex, Address } from "viem";
 
-import { DataCompleteness } from "../types/datasource";
 import { DataEntry, RailgunEventType } from "../types/data-entry";
 import {
   CommitmentBatchEventArgs,
@@ -40,7 +39,6 @@ export function adaptParsedCommitmentBatch(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       treeNumber: Number(args.treeNumber), // Now args.treeNumber is typed
@@ -94,7 +92,6 @@ export function adaptParsedNullifiers(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex, // All entries from this log share the same tx/logIndex
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       treeNumber: Number(args.treeNumber),
@@ -121,7 +118,6 @@ export function adaptParsedUnshield(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       to: args.to,
@@ -180,7 +176,6 @@ export function adaptParsedShield(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       treeNumber: Number(args.treeNumber),
@@ -261,7 +256,6 @@ export function adaptParsedGeneratedCommitmentBatch(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       treeNumber: Number(args.treeNumber),
@@ -317,7 +311,6 @@ export function adaptParsedNullified(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       treeNumber: Number(args.treeNumber),
@@ -376,7 +369,6 @@ export function adaptParsedTransact(
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
     blockTimestamp: timestamp,
-    completeness: DataCompleteness.BASIC,
     railgunTxid: undefined,
     payload: {
       treeNumber: Number(args.treeNumber),
