@@ -1,15 +1,8 @@
 import { SubsquidClient } from "@railgun-reloaded/subsquid-client";
-import { DataSource, DataCompleteness } from "../../types/datasource";
+import { DataSource } from "../../types/datasource";
 import { DataEntry, RailgunEventType } from "../../types/data-entry";
-import { type Hash } from 'viem';
-import {
-  adaptSubsquidNullifier,
-  adaptSubsquidUnshield,
-  adaptSubsquidCommitment,
-  adaptSubsquidTransaction,
-  AdaptedSubsquidTransaction,
-} from "../../adapters/subsquid-events";
-import { buildBlockRangeRawGQLQuery, hasQueries } from "./utils";
+import { buildBlockRangeRawGQLQuery } from "./queries";
+import { mapEventToDataEntries, sortDataEntries } from "./mapper";
 
 interface SquidStatusResponse {
   squidStatus?: {
@@ -72,11 +65,6 @@ export class SubsquidSource implements DataSource {
     const self = this;
     await self.updateHead();
     console.log('HEAD UPDATED');
-    // Check if we should process any queries based on eventTypes
-    if (this.eventTypes && !hasQueries(this.eventTypes)) {
-      console.log("SubsquidSource: No supported event types requested, skipping queries");
-      return emptyIterator();
-    }
 
     let currentHeight = height;
     let currentBatchEntries: DataEntry[] = [];
@@ -85,7 +73,9 @@ export class SubsquidSource implements DataSource {
     // Create an async iterator to return DataEntry objects
     const iterableIterator: AsyncIterableIterator<DataEntry> = {
       async next(): Promise<IteratorResult<DataEntry>> {
+        console.log('NEXT');
         while (true) {
+          console.log('Iterable true', currentHeight);
           // If there are items in the current batch, return the next one
           if (bufferIndex < currentBatchEntries.length) {
             const entry = currentBatchEntries[bufferIndex++];
@@ -121,93 +111,10 @@ export class SubsquidSource implements DataSource {
             const result = await self.subsquidClient.request({ query: rawQuery });
 
             // Process the results into DataEntry objects
-            const adaptedEvents: DataEntry[] = [];
-
-            // Extract transactions for railgunTxid correlation
-            const transactionsMap = new Map<Hash, AdaptedSubsquidTransaction>();
-            const transactions = ((result as any).transactions || []);
-
-            for (const tx of transactions) {
-              const adaptedTx = adaptSubsquidTransaction(tx);
-              if (adaptedTx) {
-                transactionsMap.set(adaptedTx.transactionHash, adaptedTx);
-              }
-            }
-
-            // Process event data based on requested event types
-
-            // Process nullifiers if requested
-            if (!self.eventTypes || self.eventTypes.includes(RailgunEventType.Nullifiers)) {
-              const nullifiers = ((result as any).nullifiers || []);
-              for (const nullifier of nullifiers) {
-                const railgunTx = transactionsMap.get(nullifier.transactionHash);
-                const adaptedNullifier = adaptSubsquidNullifier(nullifier, railgunTx?.id);
-                if (adaptedNullifier) {
-                  adaptedEvents.push(adaptedNullifier);
-                }
-              }
-            }
-
-            // Process unshields if requested
-            if (!self.eventTypes || self.eventTypes.includes(RailgunEventType.Unshield)) {
-              const unshields = ((result as any).unshields || []);
-              for (const unshield of unshields) {
-                const railgunTx = transactionsMap.get(unshield.transactionHash);
-                const adaptedUnshield = adaptSubsquidUnshield(unshield, railgunTx?.id);
-                if (adaptedUnshield) {
-                  adaptedEvents.push(adaptedUnshield);
-                }
-              }
-            }
-
-            // Process commitments if any commitment-related event types are requested
-            const commitmentEventTypes = [
-              RailgunEventType.Shield,
-              RailgunEventType.Transact,
-              RailgunEventType.CommitmentBatch,
-              RailgunEventType.GeneratedCommitmentBatch
-            ];
-
-            if (!self.eventTypes ||
-                self.eventTypes.some(type => commitmentEventTypes.includes(type))) {
-              const commitments = ((result as any).commitments || []);
-              for (const commitment of commitments) {
-                // Filter by commitment type if specific event types are requested
-                if (self.eventTypes) {
-                  // Skip if this commitment type doesn't match any requested event type
-                  const commitmentType = commitment.__typename;
-                  const eventType = commitmentTypeToEventType(commitmentType);
-                  if (eventType && !self.eventTypes.includes(eventType)) {
-                    continue;
-                  }
-                }
-
-                const railgunTx = transactionsMap.get(commitment.transactionHash);
-                const adaptedCommitment = adaptSubsquidCommitment(commitment, railgunTx?.id);
-                if (adaptedCommitment) {
-                  adaptedEvents.push(adaptedCommitment);
-                }
-              }
-            }
-
-            // Sort the events by blockNumber and logIndex
-            adaptedEvents.sort((a, b) => {
-              // First sort by block number
-              if (a.blockNumber !== b.blockNumber) {
-                return Number(a.blockNumber - b.blockNumber);
-              }
-
-              // Then by log index if both have valid indices
-              if (a.logIndex !== -1 && b.logIndex !== -1) {
-                return a.logIndex - b.logIndex;
-              }
-
-              // Otherwise sort by transaction hash for stable ordering
-              return a.transactionHash < b.transactionHash ? -1 : 1;
-            });
-
-            // Update state for next iteration
-            currentBatchEntries = adaptedEvents;
+            const adaptedEvents = mapEventToDataEntries(result, self.eventTypes);
+            
+            // Sort the events
+            currentBatchEntries = sortDataEntries(adaptedEvents);
             bufferIndex = 0;
 
             // If no data was found, move to the next block range
@@ -255,20 +162,4 @@ function emptyIterator(): AsyncIterableIterator<DataEntry> {
       return this;
     },
   };
-}
-
-// Helper to convert commitment type to event type
-function commitmentTypeToEventType(commitmentType: string): RailgunEventType | null {
-  switch (commitmentType) {
-    case 'LegacyGeneratedCommitment':
-      return RailgunEventType.GeneratedCommitmentBatch;
-    case 'LegacyEncryptedCommitment':
-      return RailgunEventType.CommitmentBatch;
-    case 'ShieldCommitment':
-      return RailgunEventType.Shield;
-    case 'TransactCommitment':
-      return RailgunEventType.Transact;
-    default:
-      return null;
-  }
 }

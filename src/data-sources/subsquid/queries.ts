@@ -1,5 +1,3 @@
-import { RailgunEventType } from "../../types/data-entry";
-
 // this is not ideal and should be replaced in favor of using .query() once we fix https://github.com/railgun-reloaded/subsquid-client/pull/21
 export const buildBlockRangeRawGQLQuery = (fromBlock: bigint, toBlock: bigint, batchSize: number): string => {
   const fromBlockStr = fromBlock.toString();
@@ -137,24 +135,4 @@ query RailgunEvents {
   }
 }
 `;
-};
-
-// Helper to check if specific event types are requested
-export const hasQueries = (eventTypes?: RailgunEventType[]): boolean => {
-  // If no event types specified, we query everything
-  if (!eventTypes || eventTypes.length === 0) {
-    return true;
-  }
-
-  // Check if any of the specified event types are ones we support
-  const supportedTypes = [
-    RailgunEventType.Nullifiers,
-    RailgunEventType.Unshield,
-    RailgunEventType.Shield,
-    RailgunEventType.Transact,
-    RailgunEventType.CommitmentBatch,
-    RailgunEventType.GeneratedCommitmentBatch
-  ];
-
-  return eventTypes.some(type => supportedTypes.includes(type));
 };
