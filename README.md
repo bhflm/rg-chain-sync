@@ -1,66 +1,110 @@
 # RAILGUN Chain Sync
 
-// I did ask gemini to do a readme about current status of things and this is what it came up with lol
+A modular data retrieval and processing system for RAILGUN events across various blockchain networks. This library provides a unified approach to fetching and aggregating RAILGUN-related events from multiple data sources.
 
-## The Problem We're Solving
+![Architecture Diagram](diagram.png)
 
-ELI5 VIBE CODED README 
+## Overview
 
-*   **RAILGUN data is sparse:** Scanning every single block on Ethereum/Polygon/etc. just for RAILGUN stuff is not efficient at all. Most blocks are empty for us.
-*   **Different Data Sources, Different Quirks:**
-    *   **RPC Nodes:** Fast for *latest* blocks, but often limited (rate limits, batch sizes). Getting details like internal transactions (needed for full RAILGUN TXIDs) is hard or impossible without special (expensive) calls. Gives us basic, trustless data if you trust the node.
-    *   **Subsquid Indexer:**  Gives us *everything*, including internal transactions and pre-calculated RAILGUN TXIDs. But, it runs a bit behind the absolute chain tip (to avoid reorg headaches)
-    *   **Snapshots:** data dump (like a file or database). Super fast for catching up on old history, but obviously static – doesn't update in real-time.
+RAILGUN Chain Sync solves the challenge of efficiently retrieving and processing RAILGUN event data from blockchains. It provides:
 
-## The Approach: Iterators and Aggregation
+- **Source-Agnostic Data Retrieval**: Standardized access to data from RPC nodes, Subsquid indexers, and other sources
+- **Unified Data Format**: Common representation of all RAILGUN event types
+- **Efficient Processing**: Asynchronous iterators for seamless consumption of ordered event streams
+- **Flexible Aggregation**: Combine data from multiple sources with smart prioritization and deduplication
 
-We treat each data source like an async conveyor belt carrying boxes of data
+## Key Components
 
-### 1. The `DataSource` Interface (`src/types/datasource.ts`)
+### Data Sources
 
-blueprint for every data source. It promises to provide:
+The library implements multiple data sources through a common interface:
 
-*   `head: bigint`: The latest block number this source knows about.
-*   `syncing: boolean`: Is this source still trying to get new data? (Snapshots are `false`, RPC/Subsquid are usually `true`).
-*   `read(height: bigint, eventTypes?: RailgunEventType[]): Promise<AsyncIterableIterator<DataEntry>>`: This is the core! It gives you an async iterator (usable with `for await...of`) that yields standardized `DataEntry` objects starting from the requested `height`. You can optionally ask for specific `eventTypes`.
-*   `destroy()`: Cleans things up.
+- **RPC Source**: Connects directly to blockchain nodes for real-time data
+- **Subsquid Source**: Retrieves comprehensive indexed data from Subsquid
+- **Aggregated Source**: Combines multiple sources with smart prioritization
 
-### 2. The `DataEntry` Type (`src/types/data-entry.ts`)
+Each source exposes a consistent async iterator interface, allowing consumers to process events in chronological order.
 
-This is the **standardized box** that all sources put their data into before yielding it. It ensures consistency.
+### Event Types
 
-*   **Common Info:** `source`, `blockNumber`, `transactionHash`, `logIndex` (maybe -1 if unknown), `blockTimestamp`, `completeness` (BASIC/COMPLETE/VERIFIED), `railgunTxid` (optional).
-*   **`type`:** Tells you *what kind* of event this is (e.g., `RailgunEventType.Nullifiers`, `RailgunEventType.CommitmentBatch`).
-*   **`payload`:** Contains the data *specific* to that event type (e.g., the actual nullifier hex string, commitment details).
+The system handles all RAILGUN event types:
 
-### 3. Concrete Sources (`src/datasources/rpc.ts`, `src/datasources/subsquid.ts`)
+- Nullifiers
+- Commitments (Shield, Transact, CommitmentBatch, GeneratedCommitmentBatch)
+- Unshields
 
-*   **`RpcSource`:** Implements `DataSource`. Uses `RailgunScanner` -> `viem` -> RPC Node. Fetches logs, parses them, gets block timestamps. Uses **RPC Adapters** to convert parsed logs into `DataEntry`. Marks completeness as `BASIC`.
-*   **`SubsquidSource`:** Implements `DataSource`. Uses `@railgun-reloaded/subsquid-client` -> Subsquid GraphQL API. Gets structured data back. Uses **Subsquid Adapters** to convert GraphQL results into `DataEntry`. Marks completeness as `COMPLETE`.
+### Data Flow
 
-*(A `SnapshotSource` would be implemented similarly).*
+1. **Data Sources** connect to their respective endpoints and retrieve raw event data
+2. **Adapters** transform source-specific data into standardized `DataEntry` objects
+3. **Consumers** process these entries through async iterators
+4. **Aggregator** (optional) combines entries from multiple sources with deduplication
 
-### 4. Adapters (`src/adapters/`)
+## Architecture
 
-These are the crucial translators. They take the raw/parsed data *specific* to a source (Viem Log, Subsquid JSON) and convert it into the standard `DataEntry` format. This is where we handle differences like V1 `bigint` nullifiers vs V2 `bytes32` hex strings.
+### The `DataSource` Interface
 
-### 5. The `AggregatedSource` (`src/datasources/aggregated.ts`)
+Each data source implements:
 
-*   Takes an **ordered list** of `DataSource` instances (e.g., `[subsquidSource, rpcSourceV1]`). Order = Priority.
-*   Its `read()` method starts iterators for all underlying sources *concurrently*.
-*   It keeps track of the next available item from each source.
-*   In a loop, it finds the chronologically *earliest* item across all sources (checking block, then log index, then source priority).
-*   It **deduplicates** based on `txHash` and `logIndex`.
-*   It yields the winning item and fetches the *next* item only from the source it just yielded from.
-*   The result is a single, ordered, deduplicated stream of `DataEntry` items, giving you the best available data from your configured sources.
+- `head: bigint`: Latest known block number
+- `syncing: boolean`: Source update status
+- `read(height: bigint, eventTypes?: RailgunEventType[]): Promise<AsyncIterableIterator<DataEntry>>`: Core event retrieval method
+- `destroy()`: Cleanup method
 
-## TODO
+### The `DataEntry` Type
 
-1.  **Implement More Adapters:** Create adapters for *all* relevant event types (Commitments, Shields, Unshields, Transacts) for both RPC and Subsquid sources. Ensure they correctly produce the `DataEntry` format.
-2.  **Enhance Source `read` Methods:** Make `RpcSource.read` and `SubsquidSource.read` dynamically build queries based on the requested `eventTypes` filter (instead of just nullifiers or everything). Handle fetching and adapting multiple types concurrently if efficient.
-3.  **Refine AggregatedSource:** Thoroughly test deduplication and priority handling, especially with events that might exist in both sources but have slightly different `completeness` or `logIndex` details. Consider edge cases and performance.
-4.  **Implement `SnapshotSource`**.
-5.  **Reorg Handling:** Add logic (likely in `AggregatedSource` or a layer above) to detect and handle chain reorganizations. This might involve buffering recent blocks and checking for hash mismatches.
-6.  **Verification:** Implement the on-chain Merkle root verification step against yielded `DataEntry` items (especially those with `completeness: COMPLETE`).
-7.  **Caching:** Add more robust caching layers where appropriate (e.g., block timestamps in `RpcSource`, maybe recent results in `AggregatedSource`).
-8.  **Transaction Builder:** Build the higher-level service to consume the `AggregatedSource` stream and reconstruct full RAILGUN transactions (grouping related shields/unshields/nullifiers potentially using `railgunTxid` when available from sources like Subsquid).
+Standardized event representation with:
+
+- Common metadata: `source`, `blockNumber`, `transactionHash`, `logIndex`, `blockTimestamp`
+- `type`: Event type identifier
+- `payload`: Event-specific data (nullifiers, commitments, etc.)
+
+### Adapters
+
+Translator layer that converts source-specific data formats into the standardized `DataEntry` format, handling:
+
+- Type conversion
+- Data normalization
+- Format standardization
+
+## Usage Example
+
+```typescript
+// Initialize a source
+const subsquidSource = new SubsquidSource({
+  network: "ethereum",
+  batchSize: 100,
+  eventTypes: [RailgunEventType.Shield, RailgunEventType.Nullifiers]
+});
+
+// Read events starting from a specific block
+const iterator = await subsquidSource.read(10000000n);
+
+// Process events using async iteration
+for await (const entry of iterator) {
+  console.log(`Event at block ${entry.blockNumber}: ${entry.type}`);
+  
+  if (entry.blockNumber > 10001000n) {
+    break; // Stop after 1000 blocks
+  }
+}
+
+// Clean up resources
+subsquidSource.destroy();
+```
+
+## Current Status
+
+The library currently supports:
+- Complete implementation of RPC and Subsquid sources
+- Adapters for all major RAILGUN event types
+- Event aggregation with deduplication
+- Standardized iterator pattern for consuming events
+
+## Future Enhancements
+
+1. **Performance Optimizations**: Improved batching and parallel processing
+2. **Snapshot Support**: Fast synchronization from static data snapshots
+3. **Reorg Handling**: Detection and recovery for chain reorganizations
+4. **Verification**: On-chain Merkle root verification
+5. **Transaction Reconstruction**: Higher-level service to group related events into complete RAILGUN transactions
