@@ -1,7 +1,6 @@
 // src/types/data-entry.ts
 
 import { type Address, type Hash, type Hex } from 'viem';
-import { DataCompleteness } from './datasource';
 
 
 export enum RailgunEventType {
@@ -124,8 +123,6 @@ interface BaseDataEntry {
   logIndex: number;
   /** Block timestamp (seconds since epoch) - Crucial for ordering */
   blockTimestamp: number;
-  /** Indicator of data completeness/quality */
-  completeness: DataCompleteness;
   /** Optional: RAILGUN transaction ID (often only from Subsquid/processed data) */
   railgunTxid?: string; // Usually undefined for raw RPC
   // have logs ???

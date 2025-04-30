@@ -1,6 +1,5 @@
 import { type Hash, type Hex, type Address } from 'viem';
 import { DataEntry, RailgunEventType } from '../types/data-entry';
-import { DataCompleteness } from '../types/datasource';
 import { CommitmentType } from '../types/events';
 
 // Define interface types for Subsquid data structures
@@ -159,7 +158,6 @@ export function adaptSubsquidNullifier(
             transactionHash: transactionHash,
             logIndex: logIndex,
             blockTimestamp: blockTimestamp,
-            completeness: DataCompleteness.COMPLETE,
             railgunTxid: railgunTxid,
             payload: {
                 treeNumber: treeNumber,
@@ -208,7 +206,6 @@ export function adaptSubsquidUnshield(
             transactionHash: transactionHash,
             logIndex: isNaN(logIndex) ? -1 : logIndex,
             blockTimestamp: blockTimestamp,
-            completeness: DataCompleteness.COMPLETE,
             railgunTxid: railgunTxid,
             payload: {
                 to: to,
@@ -264,7 +261,6 @@ export function adaptSubsquidCommitment(
             transactionHash,
             logIndex: -1, // Commitments don't typically have log index in Subsquid
             blockTimestamp,
-            completeness: DataCompleteness.COMPLETE,
             railgunTxid,
         };
 

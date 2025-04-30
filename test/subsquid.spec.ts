@@ -9,10 +9,6 @@ import {
   isShieldEntry,
   isCommitmentBatchEntry,
 } from "../src/types/data-entry";
-import { DataCompleteness } from "../src/types/datasource";
-
-
-const BATCH_SIZE_FOR_TESTING = 50;
 
 describe("SubsquidSource Integration", () => {
   let subsquidSource: SubsquidSource;
@@ -94,13 +90,15 @@ describe("SubsquidSource Integration", () => {
             lastSecondaryKey = entry.transactionHash + (entry.logIndex > -1 ? `-${entry.logIndex}` : ''); // Reset secondary key
         }
         count++;
-        if (count >= BATCH_SIZE_FOR_TESTING * 2) break; // Don't run forever
+        if (count >= 100) break; // Don't run forever
     }
     assert.ok(count > 0, "Should have yielded at least one event in the range");
   });
 
   it("should correctly paginate through multiple batches", async () => {
     // test relies on the specific range having more events than the batch size
+
+    const BATCH_SIZE_FOR_TESTING = 50;
 
     const RANGE_START_BLOCK = 19000000n;
     const RANGE_END_BLOCK = 19000500n;
@@ -126,7 +124,7 @@ describe("SubsquidSource Integration", () => {
 
 
    it("read(nearHead) should yield recent events", async () => {
-     const startBlock = subsquidSource.head - BigInt(BATCH_SIZE_FOR_TESTING * 2); // Look back a bit
+     const startBlock = subsquidSource.head - BigInt(200); // Look back a bit
      const iterator = await subsquidSource.read(startBlock);
      let foundRecent = false;
       for await (const entry of iterator) {
@@ -174,7 +172,6 @@ describe("SubsquidSource Integration", () => {
 
     assert.strictEqual(foundEvent.type, RailgunEventType.Nullifiers, "Type mismatch");
     assert.strictEqual(foundEvent.source, "subsquid", "Source mismatch");
-    assert.strictEqual(foundEvent.completeness, DataCompleteness.COMPLETE, "Completeness mismatch");
     assert.strictEqual(foundEvent.blockNumber, targetBlock, "Block number mismatch");
     assert.strictEqual(foundEvent.transactionHash, KNOWN_TX_HASH_FOR_NULLIFIER, "TX Hash mismatch");
     assert.ok(foundEvent.blockTimestamp > 0, "Timestamp invalid");
@@ -220,7 +217,6 @@ describe("SubsquidSource Integration", () => {
 
     assert.strictEqual(foundEvent.type, EXPECTED_COMMITMENT_TYPE, "Commitment event type mismatch");
     assert.strictEqual(foundEvent.source, "subsquid");
-    assert.strictEqual(foundEvent.completeness, DataCompleteness.COMPLETE);
     assert.strictEqual(foundEvent.blockNumber, targetBlock);
     assert.strictEqual(foundEvent.transactionHash, KNOWN_TX_HASH_FOR_COMMITMENT);
     assert.strictEqual(foundEvent.payload.treeNumber, EXPECTED_TREE_NUMBER_FOR_COMMITMENT);
