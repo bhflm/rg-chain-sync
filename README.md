@@ -38,7 +38,7 @@ The system handles all RAILGUN event types:
 1. **Data Sources** connect to their respective endpoints and retrieve raw event data
 2. **Adapters** transform source-specific data into standardized `DataEntry` objects
 3. **Consumers** process these entries through async iterators
-4. **Aggregator** (optional) combines entries from multiple sources with deduplication
+4. **Aggregator** combines entries from multiple sources with deduplication
 
 ## Architecture
 
@@ -67,44 +67,88 @@ Translator layer that converts source-specific data formats into the standardize
 - Data normalization
 - Format standardization
 
-## Usage Example
+## The Aggregated Source: Core of RAILGUN Chain Sync
+
+The `AggregatedSource` is the centerpiece of this library, designed to provide a unified, seamless approach to blockchain data retrieval. By combining multiple data sources, it delivers:
+
+1. **Optimal Data Quality**: Prioritizes sources to get the most complete data (e.g., Subsquid provides railgunTxid data that RPC doesn't)
+2. **Continuous Syncing**: Uses faster RPC for recent blocks while falling back to more complete indexed data for historical blocks
+3. **Smart Deduplication**: Automatically removes duplicate events when the same data is available from multiple sources
+4. **Unified Chronological Stream**: All events are properly ordered by block number and log index
+
+### Usage Example
 
 ```typescript
-// Initialize a source
-const subsquidSource = new SubsquidSource({
-  network: "ethereum",
-  batchSize: 100,
-  eventTypes: [RailgunEventType.Shield, RailgunEventType.Nullifiers]
+import {
+  AggregatedSource,
+  RpcSource,
+  SubsquidSource,
+  RailgunEventType
+} from 'chain-sync';
+import { NetworkName } from './config/network-config';
+
+// Initialize the necessary data sources
+// Each source has its strengths and limitations
+const rpcSource = new RpcSource({
+  networkName: NetworkName.Ethereum,
+  providerUrl: 'https://eth-mainnet.alchemyapi.io/v2/your-api-key',
+  version: 'v2',
+  batchSize: 100
 });
 
-// Read events starting from a specific block
-const iterator = await subsquidSource.read(10000000n);
+const subsquidSource = new SubsquidSource({
+  network: 'ethereum',
+  batchSize: 100
+});
 
-// Process events using async iteration
+// Create the aggregated source
+// Source order defines priority - first source gets priority for duplicate events
+const aggregatedSource = new AggregatedSource({
+  sources: [subsquidSource, rpcSource], // Subsquid preferred for its complete data
+  deduplicate: true                     // Remove duplicates based on transactionHash+logIndex
+});
+
+// Start reading events from a specific block
+const startBlock = 14000000n;
+const iterator = await aggregatedSource.read(startBlock);
+
+// Process the unified stream of events in chronological order
 for await (const entry of iterator) {
-  console.log(`Event at block ${entry.blockNumber}: ${entry.type}`);
-  
-  if (entry.blockNumber > 10001000n) {
-    break; // Stop after 1000 blocks
+  // Each entry is a standardized DataEntry object, regardless of its original source
+  console.log(`Block ${entry.blockNumber}, Event: ${entry.type}, Source: ${entry.source}`);
+
+  // The aggregator automatically provides the most complete data available
+  // For example, Subsquid entries will include railgunTxid when available
+  if (entry.railgunTxid) {
+    console.log(`RAILGUN Transaction ID: ${entry.railgunTxid}`);
+  }
+
+  // Process events by their type
+  switch (entry.type) {
+    case RailgunEventType.Nullifiers:
+      // Process nullifiers
+      console.log(`Nullifiers: ${entry.payload.nullifiers.join(', ')}`);
+      break;
+
+    case RailgunEventType.Shield:
+      // Process shield events
+      const shieldAmount = entry.payload.commitments[0]?.preimage?.value;
+      const tokenAddress = entry.payload.commitments[0]?.preimage?.token.tokenAddress;
+      console.log(`Shield: ${shieldAmount} of token ${tokenAddress}`);
+      break;
+
+    case RailgunEventType.Unshield:
+      // Process unshield events
+      console.log(`Unshield: ${entry.payload.amount} to ${entry.payload.to}`);
+      break;
+  }
+
+  // Optionally limit the range of blocks to process
+  if (entry.blockNumber > 14010000n) {
+    break;
   }
 }
 
-// Clean up resources
-subsquidSource.destroy();
+// Clean up when done
+aggregatedSource.destroy();
 ```
-
-## Current Status
-
-The library currently supports:
-- Complete implementation of RPC and Subsquid sources
-- Adapters for all major RAILGUN event types
-- Event aggregation with deduplication
-- Standardized iterator pattern for consuming events
-
-## Future Enhancements
-
-1. **Performance Optimizations**: Improved batching and parallel processing
-2. **Snapshot Support**: Fast synchronization from static data snapshots
-3. **Reorg Handling**: Detection and recovery for chain reorganizations
-4. **Verification**: On-chain Merkle root verification
-5. **Transaction Reconstruction**: Higher-level service to group related events into complete RAILGUN transactions
