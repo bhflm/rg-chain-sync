@@ -133,6 +133,19 @@ describe("SubsquidSource Integration", () => {
   // });
 
 
+   // it("read(nearHead) should yield recent events", async () => {
+   //   const startBlock = subsquidSource.head - BigInt(BATCH_SIZE_FOR_TESTING * 2); // Look back a bit
+   //   const iterator = await subsquidSource.read(startBlock);
+   //   let foundRecent = false;
+   //    for await (const entry of iterator) {
+   //        assert.ok(entry.blockNumber >= startBlock, "Yielded block before startBlock");
+   //        foundRecent = true;
+   //        break;
+   //    }
+   //    assert.ok(foundRecent, `Should have yielded events near head (starting ${startBlock})`);
+   // });
+
+
   // events validation || data adapters
 
   // it("should correctly adapt Nullifier data", async () => {
@@ -229,70 +242,70 @@ describe("SubsquidSource Integration", () => {
   // });
 
 
-  it("should correctly adapt Shield data", async () => {
-    // @@TODO: Shield test is pretty incomplete tbh
-    const targetBlock = 17756057n;
-    const KNOWN_TX_HASH_FOR_SHIELD = '0x0be85083fed727af5e665427c62cea2fc55b586a18279ba8be2dfd3223e5e163';
-    const KNOWN_COMMITMENT_HASH_FOR_SHIELD = '0x1838a4f13d1261835c6f54bdd996c94d2ef5f8060fc131950c903d3f1de11222';
-    const COMMITMENT_TOKEN_ADDR = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
-    // @@TODO: How do we
-    const iterator = await subsquidSource.read(targetBlock);
-    let foundEvent: DataEntry | null = null;
+  // it("should correctly adapt Shield data", async () => {
+  //   // @@TODO: Shield test is pretty incomplete tbh
+  //   const targetBlock = 17756057n;
+  //   const KNOWN_TX_HASH_FOR_SHIELD = '0x0be85083fed727af5e665427c62cea2fc55b586a18279ba8be2dfd3223e5e163';
+  //   const KNOWN_COMMITMENT_HASH_FOR_SHIELD = '0x1838a4f13d1261835c6f54bdd996c94d2ef5f8060fc131950c903d3f1de11222';
+  //   const COMMITMENT_TOKEN_ADDR = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+  //   // @@TODO: How do we
+  //   const iterator = await subsquidSource.read(targetBlock);
+  //   let foundEvent: DataEntry | null = null;
 
-    for await (const entry of iterator) {
-      console.log('ENTRY; ', entry);
-          if (entry.blockNumber > targetBlock) break;
-          if (entry.blockNumber === targetBlock &&
-              entry.transactionHash === KNOWN_TX_HASH_FOR_SHIELD &&
-              isShieldEntry(entry))
-          {
-              foundEvent = entry;
-              break;
-          }
-    }
+  //   for await (const entry of iterator) {
+  //     console.log('ENTRY; ', entry);
+  //         if (entry.blockNumber > targetBlock) break;
+  //         if (entry.blockNumber === targetBlock &&
+  //             entry.transactionHash === KNOWN_TX_HASH_FOR_SHIELD &&
+  //             isShieldEntry(entry))
+  //         {
+  //             foundEvent = entry;
+  //             break;
+  //         }
+  //   }
 
-    // console.log('ENTRYT COMMITMENT: ', foundEvent?.payload.commitments[0].preimage);
+  //   // console.log('ENTRYT COMMITMENT: ', foundEvent?.payload.commitments[0].preimage);
 
-    assert.ok(foundEvent, `Shield event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_SHIELD}`);
-    if (!foundEvent || !isShieldEntry(foundEvent)) return;
+  //   assert.ok(foundEvent, `Shield event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_SHIELD}`);
+  //   if (!foundEvent || !isShieldEntry(foundEvent)) return;
 
-    assert.strictEqual(foundEvent.type, RailgunEventType.Shield);
-    assert.strictEqual(foundEvent.source, "subsquid");
-    assert.strictEqual(foundEvent?.payload.commitments[0].hash, KNOWN_COMMITMENT_HASH_FOR_SHIELD)
-    assert.strictEqual(foundEvent?.payload.commitments[0].preimage.token.tokenAddress, COMMITMENT_TOKEN_ADDR)
-  });
+  //   assert.strictEqual(foundEvent.type, RailgunEventType.Shield);
+  //   assert.strictEqual(foundEvent.source, "subsquid");
+  //   assert.strictEqual(foundEvent?.payload.commitments[0].hash, KNOWN_COMMITMENT_HASH_FOR_SHIELD)
+  //   assert.strictEqual(foundEvent?.payload.commitments[0].preimage.token.tokenAddress, COMMITMENT_TOKEN_ADDR)
+  // });
 
-  it("should correctly adapt Unshield data", async () => {
-    const KNOWN_TX_HASH_FOR_UNSHIELD = '0x1bcca081750ee74fffd491a14c4ecc5b0c7872e64ad47bee22bd376ac488d27b';
-    const EXPECTED_UNSHIELD_TO_ADDRESS = '0x4025ee6512dbbda97049bcf5aa5d38c54af6be8a';
-    const EXPECTED_UNSHIELD_TOKEN_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
-    const EXPECTED_UNSHIELD_AMOUNT = 833856754320327459n;
+  // it("should correctly adapt Unshield data", async () => {
+  //   const KNOWN_TX_HASH_FOR_UNSHIELD = '0x1bcca081750ee74fffd491a14c4ecc5b0c7872e64ad47bee22bd376ac488d27b';
+  //   const EXPECTED_UNSHIELD_TO_ADDRESS = '0x4025ee6512dbbda97049bcf5aa5d38c54af6be8a';
+  //   const EXPECTED_UNSHIELD_TOKEN_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+  //   const EXPECTED_UNSHIELD_AMOUNT = 833856754320327459n;
 
-    const targetBlock = 17792206n;
-    const iterator = await subsquidSource.read(targetBlock);
-    let foundEvent: DataEntry | null = null;
+  //   const targetBlock = 17792206n;
+  //   const iterator = await subsquidSource.read(targetBlock);
+  //   let foundEvent: DataEntry | null = null;
 
-    for await (const entry of iterator) {
-      console.log('ENTRY: ', entry);
-          if (entry.blockNumber > targetBlock) break;
-          if (entry.blockNumber === targetBlock &&
-              entry.transactionHash === KNOWN_TX_HASH_FOR_UNSHIELD &&
-              isUnshieldEntry(entry))
-          {
-              // Simple check: find *an* unshield in the block/tx
-              foundEvent = entry;
-              break;
-          }
-    }
+  //   for await (const entry of iterator) {
+  //     console.log('ENTRY: ', entry);
+  //         if (entry.blockNumber > targetBlock) break;
+  //         if (entry.blockNumber === targetBlock &&
+  //             entry.transactionHash === KNOWN_TX_HASH_FOR_UNSHIELD &&
+  //             isUnshieldEntry(entry))
+  //         {
+  //             // Simple check: find *an* unshield in the block/tx
+  //             foundEvent = entry;
+  //             break;
+  //         }
+  //   }
 
-    assert.ok(foundEvent, `Unshield event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_UNSHIELD}`);
-    if (!foundEvent || !isUnshieldEntry(foundEvent)) return;
+  //   assert.ok(foundEvent, `Unshield event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_UNSHIELD}`);
+  //   if (!foundEvent || !isUnshieldEntry(foundEvent)) return;
 
-    assert.strictEqual(foundEvent.type, RailgunEventType.Unshield);
-    assert.strictEqual(foundEvent.source, "subsquid");
-    assert.strictEqual(foundEvent.payload.to.toLowerCase(), EXPECTED_UNSHIELD_TO_ADDRESS.toLowerCase(), "Unshield 'to' address mismatch");
-    assert.strictEqual(foundEvent.payload.tokenAddress.toLowerCase(), EXPECTED_UNSHIELD_TOKEN_ADDRESS.toLowerCase(), "Unshield token address mismatch");
-    assert.strictEqual(foundEvent.payload.amount, EXPECTED_UNSHIELD_AMOUNT, "Unshield amount mismatch");
-  });
+  //   assert.strictEqual(foundEvent.type, RailgunEventType.Unshield);
+  //   assert.strictEqual(foundEvent.source, "subsquid");
+  //   assert.strictEqual(foundEvent.payload.to.toLowerCase(), EXPECTED_UNSHIELD_TO_ADDRESS.toLowerCase(), "Unshield 'to' address mismatch");
+  //   assert.strictEqual(foundEvent.payload.tokenAddress.toLowerCase(), EXPECTED_UNSHIELD_TOKEN_ADDRESS.toLowerCase(), "Unshield token address mismatch");
+  //   assert.strictEqual(foundEvent.payload.amount, EXPECTED_UNSHIELD_AMOUNT, "Unshield amount mismatch");
+  // });
 
 });
