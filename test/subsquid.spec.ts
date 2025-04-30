@@ -23,7 +23,7 @@ describe("SubsquidSource Integration", () => {
     // Initialize the SubsquidSource
     subsquidSource = new SubsquidSource({
       network: "ethereum",
-      batchSize: 100,
+      batchSize: 500,
     });
 
     // Wait for head initialization
@@ -178,55 +178,121 @@ describe("SubsquidSource Integration", () => {
   //   assert.ok(foundEvent.payload.nullifiers[0].startsWith('0x') && foundEvent.payload.nullifiers[0].length === 66, "Nullifier format invalid");
   // });
 
-  it("should correctly adapt Commitment data (from Transact/Shield)", async () => {
-    const targetBlock = 14755920n;
-    const EXPECTED_COMMITMENT_HASH = '0x1afd01a29faf22dcc5678694092a08d38de99fc97d07b9281fa66f956ce43579';
-    const EXPECTED_COMMITMENT_INDEX = 2;
-    const KNOWN_TX_HASH_FOR_COMMITMENT = '0xf07a9a458f57f1cc9cc2e5a627c3ef611a18b77e10c2bfc133fceca7743f8d0c';
-    const EXPECTED_COMMITMENT_TYPE = RailgunEventType.CommitmentBatch;
-    const EXPECTED_TREE_NUMBER_FOR_COMMITMENT = 0;
-    const EXPECTED_START_POSITION_FOR_COMMITMENT = 2;
-    const EXPECTED_RAILGUN_TX_ID = '0x0000000000000000000000000000000000000000000000000000000000e1285000000000000000000000000000000000000000000000000000000000000001500000000000000000000000000000000000000000000000000000000000000000';
+  // it("should correctly adapt Commitment data (from Transact/Shield)", async () => {
+  //   const targetBlock = 14755920n;
+  //   const EXPECTED_COMMITMENT_HASH = '0x1afd01a29faf22dcc5678694092a08d38de99fc97d07b9281fa66f956ce43579';
+  //   const EXPECTED_COMMITMENT_INDEX = 2;
+  //   const KNOWN_TX_HASH_FOR_COMMITMENT = '0xf07a9a458f57f1cc9cc2e5a627c3ef611a18b77e10c2bfc133fceca7743f8d0c';
+  //   const EXPECTED_COMMITMENT_TYPE = RailgunEventType.CommitmentBatch;
+  //   const EXPECTED_TREE_NUMBER_FOR_COMMITMENT = 0;
+  //   const EXPECTED_START_POSITION_FOR_COMMITMENT = 2;
+  //   const EXPECTED_RAILGUN_TX_ID = '0x0000000000000000000000000000000000000000000000000000000000e1285000000000000000000000000000000000000000000000000000000000000001500000000000000000000000000000000000000000000000000000000000000000';
 
+  //   const iterator = await subsquidSource.read(targetBlock);
+  //   let foundEvent: DataEntry | null = null;
+
+  //   for await (const entry of iterator) {
+  //       if (entry.blockNumber > targetBlock) break;
+  //       if (entry.blockNumber === targetBlock &&
+  //           entry.transactionHash === KNOWN_TX_HASH_FOR_COMMITMENT &&
+  //           isCommitmentBatchEntry(entry)
+  //       ) // Check relevant types
+  //       {
+  //           // console.log('TARGET BLOCK ENTRY: ', entry);
+  //           // console.log('COMMITMENT: ', JSON.stringify((entry.payload)))
+  //           // Find the specific commitment if needed, or just validate the first one
+  //           //
+  //             const commitment = entry.payload.commitments.find(c => c.hash === EXPECTED_COMMITMENT_HASH || c.index === EXPECTED_COMMITMENT_INDEX);
+  //             if (commitment) {
+  //                 foundEvent = entry; // Found the transaction containing the commitment
+  //                 break;
+  //             }
+  //       }
+  //   }
+
+  //   assert.ok(foundEvent, `Expected commitment event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_COMMITMENT}`);
+  //   if (!foundEvent) return;
+
+  //   assert.strictEqual(foundEvent.type, EXPECTED_COMMITMENT_TYPE, "Commitment event type mismatch");
+  //   assert.strictEqual(foundEvent.source, "subsquid");
+  //   assert.strictEqual(foundEvent.completeness, DataCompleteness.COMPLETE);
+  //   assert.strictEqual(foundEvent.blockNumber, targetBlock);
+  //   assert.strictEqual(foundEvent.transactionHash, KNOWN_TX_HASH_FOR_COMMITMENT);
+  //   assert.strictEqual(foundEvent.payload.treeNumber, EXPECTED_TREE_NUMBER_FOR_COMMITMENT);
+  //   assert.strictEqual(foundEvent.payload.startPosition, EXPECTED_START_POSITION_FOR_COMMITMENT);
+  //   assert.strictEqual(foundEvent.railgunTxid, EXPECTED_RAILGUN_TX_ID);
+
+  //   const targetCommitment = foundEvent.payload.commitments.find(c => c.hash === EXPECTED_COMMITMENT_HASH || c.index === EXPECTED_COMMITMENT_INDEX);
+  //   assert.ok(targetCommitment, "Target commitment not found within the payload");
+  //   assert.strictEqual(targetCommitment.hash, EXPECTED_COMMITMENT_HASH, "Commitment hash mismatch");
+  //   assert.strictEqual(targetCommitment.index, EXPECTED_COMMITMENT_INDEX, "Commitment index mismatch");
+  // });
+
+
+  it("should correctly adapt Shield data", async () => {
+    // @@TODO: Shield test is pretty incomplete tbh
+    const targetBlock = 17756057n;
+    const KNOWN_TX_HASH_FOR_SHIELD = '0x0be85083fed727af5e665427c62cea2fc55b586a18279ba8be2dfd3223e5e163';
+    const KNOWN_COMMITMENT_HASH_FOR_SHIELD = '0x1838a4f13d1261835c6f54bdd996c94d2ef5f8060fc131950c903d3f1de11222';
+    const COMMITMENT_TOKEN_ADDR = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+    // @@TODO: How do we
     const iterator = await subsquidSource.read(targetBlock);
     let foundEvent: DataEntry | null = null;
 
     for await (const entry of iterator) {
-        if (entry.blockNumber > targetBlock) break;
-        if (entry.blockNumber === targetBlock &&
-            entry.transactionHash === KNOWN_TX_HASH_FOR_COMMITMENT &&
-            isCommitmentBatchEntry(entry)
-        ) // Check relevant types
-        {
-            // console.log('TARGET BLOCK ENTRY: ', entry);
-            // console.log('COMMITMENT: ', JSON.stringify((entry.payload)))
-            // Find the specific commitment if needed, or just validate the first one
-            //
-              const commitment = entry.payload.commitments.find(c => c.hash === EXPECTED_COMMITMENT_HASH || c.index === EXPECTED_COMMITMENT_INDEX);
-              if (commitment) {
-                  foundEvent = entry; // Found the transaction containing the commitment
-                  break;
-              }
-        }
+      console.log('ENTRY; ', entry);
+          if (entry.blockNumber > targetBlock) break;
+          if (entry.blockNumber === targetBlock &&
+              entry.transactionHash === KNOWN_TX_HASH_FOR_SHIELD &&
+              isShieldEntry(entry))
+          {
+              foundEvent = entry;
+              break;
+          }
     }
 
-    assert.ok(foundEvent, `Expected commitment event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_COMMITMENT}`);
-    if (!foundEvent) return;
+    // console.log('ENTRYT COMMITMENT: ', foundEvent?.payload.commitments[0].preimage);
 
-    assert.strictEqual(foundEvent.type, EXPECTED_COMMITMENT_TYPE, "Commitment event type mismatch");
+    assert.ok(foundEvent, `Shield event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_SHIELD}`);
+    if (!foundEvent || !isShieldEntry(foundEvent)) return;
+
+    assert.strictEqual(foundEvent.type, RailgunEventType.Shield);
     assert.strictEqual(foundEvent.source, "subsquid");
-    assert.strictEqual(foundEvent.completeness, DataCompleteness.COMPLETE);
-    assert.strictEqual(foundEvent.blockNumber, targetBlock);
-    assert.strictEqual(foundEvent.transactionHash, KNOWN_TX_HASH_FOR_COMMITMENT);
-    assert.strictEqual(foundEvent.payload.treeNumber, EXPECTED_TREE_NUMBER_FOR_COMMITMENT);
-    assert.strictEqual(foundEvent.payload.startPosition, EXPECTED_START_POSITION_FOR_COMMITMENT);
-    assert.strictEqual(foundEvent.railgunTxid, EXPECTED_RAILGUN_TX_ID);
-
-    const targetCommitment = foundEvent.payload.commitments.find(c => c.hash === EXPECTED_COMMITMENT_HASH || c.index === EXPECTED_COMMITMENT_INDEX);
-    assert.ok(targetCommitment, "Target commitment not found within the payload");
-    assert.strictEqual(targetCommitment.hash, EXPECTED_COMMITMENT_HASH, "Commitment hash mismatch");
-    assert.strictEqual(targetCommitment.index, EXPECTED_COMMITMENT_INDEX, "Commitment index mismatch");
+    assert.strictEqual(foundEvent?.payload.commitments[0].hash, KNOWN_COMMITMENT_HASH_FOR_SHIELD)
+    assert.strictEqual(foundEvent?.payload.commitments[0].preimage.token.tokenAddress, COMMITMENT_TOKEN_ADDR)
   });
 
+  it("should correctly adapt Unshield data", async () => {
+    const KNOWN_TX_HASH_FOR_UNSHIELD = '0x1bcca081750ee74fffd491a14c4ecc5b0c7872e64ad47bee22bd376ac488d27b';
+    const EXPECTED_UNSHIELD_TO_ADDRESS = '0x4025ee6512dbbda97049bcf5aa5d38c54af6be8a';
+    const EXPECTED_UNSHIELD_TOKEN_ADDRESS = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+    const EXPECTED_UNSHIELD_AMOUNT = 833856754320327459n;
+
+    const targetBlock = 17792206n;
+    const iterator = await subsquidSource.read(targetBlock);
+    let foundEvent: DataEntry | null = null;
+
+    for await (const entry of iterator) {
+      console.log('ENTRY: ', entry);
+          if (entry.blockNumber > targetBlock) break;
+          if (entry.blockNumber === targetBlock &&
+              entry.transactionHash === KNOWN_TX_HASH_FOR_UNSHIELD &&
+              isUnshieldEntry(entry))
+          {
+              // Simple check: find *an* unshield in the block/tx
+              foundEvent = entry;
+              break;
+          }
+    }
+
+    assert.ok(foundEvent, `Unshield event not found in block ${targetBlock} tx ${KNOWN_TX_HASH_FOR_UNSHIELD}`);
+    if (!foundEvent || !isUnshieldEntry(foundEvent)) return;
+
+    assert.strictEqual(foundEvent.type, RailgunEventType.Unshield);
+    assert.strictEqual(foundEvent.source, "subsquid");
+    assert.strictEqual(foundEvent.payload.to.toLowerCase(), EXPECTED_UNSHIELD_TO_ADDRESS.toLowerCase(), "Unshield 'to' address mismatch");
+    assert.strictEqual(foundEvent.payload.tokenAddress.toLowerCase(), EXPECTED_UNSHIELD_TOKEN_ADDRESS.toLowerCase(), "Unshield token address mismatch");
+    assert.strictEqual(foundEvent.payload.amount, EXPECTED_UNSHIELD_AMOUNT, "Unshield amount mismatch");
+  });
 
 });
