@@ -1,10 +1,10 @@
-import { 
-  createPublicClient, 
-  http, 
-  type PublicClient, 
-  type Log, 
+import {
+  createPublicClient,
+  http,
+  type PublicClient,
+  type Log,
   type Address,
-  type AbiEvent,   
+  type AbiEvent,
   parseEventLogs,
   type ParseEventLogsReturnType
 } from 'viem';
@@ -16,13 +16,13 @@ import {
   V2_LEGACY_EVENTS_ABI,
   V2_EVENTS,
   V2EventType,
-  RailgunAbi, 
+  RailgunAbi,
   RAILGUN_ABI,
 } from '../abi';
 
-import { 
-  NetworkName, 
-  RailgunProxyContract, 
+import {
+  NetworkName,
+  RailgunProxyContract,
   RailgunProxyDeploymentBlock,
   NetworkToViemChain,
   getNetworkName
@@ -68,20 +68,20 @@ export class RailgunScanner {
   ) {
     console.log('STARTING NEW SCANNER: ', config);
     this.networkName = getNetworkName(config.networkName);
-    
-    
+
+
     const viemChain = NetworkToViemChain[this.networkName];
     if (!viemChain) {
       throw new Error(`Unsupported network: ${this.networkName}`);
     }
 
-    // leave room for custom contract ???? 
-    this.contractAddress = (config.contractAddress || 
+    // leave room for custom contract ????
+    this.contractAddress = (config.contractAddress ||
       RailgunProxyContract[this.networkName]) as Address;
 
     // start block we already have on network cfg from shared models, no point on letting room for going before that ?? idc
-    this.startBlock = config.startBlock !== undefined ? 
-      config.startBlock : 
+    this.startBlock = config.startBlock !== undefined ?
+      config.startBlock :
       RailgunProxyDeploymentBlock[this.networkName];
 
     this.client = createPublicClient({
@@ -89,7 +89,7 @@ export class RailgunScanner {
       transport: http(config.providerUrl),
     });
 
-    this.batchSize = config.batchSize ?? 1000;
+    this.batchSize = config.batchSize ?? 500;
     this.scanRetryCount = config.scanRetryCount ?? 3;
     this.version = config.version;
 
@@ -125,9 +125,9 @@ export class RailgunScanner {
     fromBlock: bigint,
     toBlock: bigint,
   ): Promise<Log[]> {
-    
+
     let event: AbiEvent | undefined;
-    
+
     if (this.version === 'v1') {
       event = V1_EVENTS_ABI[eventType];
     } else if (this.version === 'v2') {
@@ -150,7 +150,7 @@ export class RailgunScanner {
     return logs;
   }
 
-  
+
    /**
    * Get and parse logs for a specific event type within a block range using viem's parseEventLogs.
    * This fetches *all* logs for the contract in the range and then filters/parses them client-side.
@@ -160,12 +160,12 @@ export class RailgunScanner {
    * @param toBlock The ending block number (inclusive).
    * @param strict Optional: Whether to enforce strict decoding (defaults to true).
    * @returns A promise that resolves to an array of parsed logs conforming to the ABI.
-   * 
-   * 
-   * this offers convenience by handling the parsing but comes at the cost of fetching potentially much 
+   *
+   *
+   * this offers convenience by handling the parsing but comes at the cost of fetching potentially much
    * larger amounts of data and performing parsing client-side.
    * it's a trade-off between RPC/network efficiency and parsing convenience/client-side load.
-   * 
+   *
    */
    public async getLogsWithParse<T extends EventType>(
     eventType: T,
@@ -173,7 +173,7 @@ export class RailgunScanner {
     toBlock: bigint,
     strict: boolean = true,
 ): Promise<ParseEventLogsReturnType<RailgunAbi, T>> { // Use the determined ABI type
-    
+
     const rawLogs: Log[] = await this.client.getLogs({
         address: this.contractAddress,
         fromBlock,
@@ -196,7 +196,7 @@ export class RailgunScanner {
 
   /**
    * Scan for events of a specific type and process them with a formatter function
-   * 
+   *
    * @param eventType The type of event to scan for
    * @param fromBlock The starting block number
    * @param formatter Function to format each log
@@ -209,11 +209,11 @@ export class RailgunScanner {
     formatter: (log: Log) => T,
     maxBlocks?: number
   ): Promise<ScanResult<T>> {
-    
+
     console.log('Running scan for events..');
-    
+
     const latestBlock = await this.getLatestBlockNumber();
-    
+
     const maxBatchSize = maxBlocks ? maxBlocks : this.batchSize;
     const toBlock = fromBlock + BigInt(maxBatchSize) > latestBlock
       ? latestBlock
@@ -230,16 +230,16 @@ export class RailgunScanner {
 
     // Get logs for this batch
     const logs = await this.getLogsForEvent(eventType, fromBlock, toBlock);
-    
+
     console.log('LOGS BATCH: ', logs);
 
     const processedLogs = logs.map(log => formatter(log));
-    
+
     console.log('PROCESSED LOGS: ', processedLogs);
 
 
     const nextBlock = toBlock + 1n;
-    
+
     return {
       logs: processedLogs,
       fromBlock,
@@ -250,7 +250,7 @@ export class RailgunScanner {
 
   /**
    * Scan for multiple event types in a single batch
-   * 
+   *
    * @param eventTypes Map of event types to their formatters
    * @param fromBlock Starting block number
    * @param maxBlocks Optional maximum number of blocks to scan
@@ -262,7 +262,7 @@ export class RailgunScanner {
     maxBlocks?: number
   ): Promise<{ [key: string]: ScanResult<T> }> {
     const latestBlock = await this.getLatestBlockNumber();
-    
+
     const maxBatchSize = maxBlocks ? maxBlocks : this.batchSize;
     const toBlock = fromBlock + BigInt(maxBatchSize) > latestBlock
       ? latestBlock
@@ -304,11 +304,11 @@ export class RailgunScanner {
 
     const results = await Promise.all(scanPromises);
     const combinedResults: { [key: string]: ScanResult<T> } = {};
-    
+
     for (const [key, result] of results) {
       combinedResults[key as string] = result as ScanResult<T>;
     }
-    
+
     return combinedResults;
   }
 };

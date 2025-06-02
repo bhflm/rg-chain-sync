@@ -59,12 +59,12 @@ export class RpcSource implements DataSource {
     scannerConfig: ConstructorParameters<typeof RailgunScanner>[0], // Pass scanner config directly
   ) {
     this.scanner = new RailgunScanner(scannerConfig);
-    // @ts-ignore // dirty bad boy // TODO: Implement this as a public getter
+    // @ts-ignore // TODO: Implement this as a public getter
     this.currentAbi = this.scanner.currentAbi!;
-    // @ts-ignore // dirty bad boy stop  // TODO: Implement this as a public getter
+    // @ts-ignore // TODO: Implement this as a public getter
     this.version = this.scanner.version;
-    // @ts-ignore // bad boy stop doing this // TODO: Implement this as a public getter
-    this.batchSize = this.scanner.batchSize;
+    // @ts-ignore // TODO: Implement this as a public getter
+    this.batchSize = scannerConfig.batchSize ?? this.scanner.batchSize;
     this.updateHead();
   }
 
@@ -277,11 +277,11 @@ export class RpcSource implements DataSource {
                         timestamp,
                       );
                       break;
-                    case "Transact": 
-                      adaptedEntries = adaptParsedTransact(parsedLog, timestamp); 
+                    case "Transact":
+                      adaptedEntries = adaptParsedTransact(parsedLog, timestamp);
                       break;
-                    case "Nullified": 
-                      adaptedEntries = adaptParsedNullified(parsedLog, timestamp); 
+                    case "Nullified":
+                      adaptedEntries = adaptParsedNullified(parsedLog, timestamp);
                       break;
                     // case V1_EVENTS.COMMITMENT_BATCH: // handle V1 specific if needed
                     default:
